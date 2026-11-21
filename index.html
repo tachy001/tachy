@@ -1,0 +1,3986 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#020205">
+    <title>Luxury Tree</title>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+                "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/+esm"
+            }
+        }
+    </script>
+
+    <style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;800&family=Ma+Shan+Zheng&display=swap');
+
+:root {
+    --accent: #d4af37;
+    --accent-rgb: 212, 175, 55;
+    --text: #f4ead2;
+    --muted: #a99b7a;
+    --panel: rgba(10, 10, 13, 0.84);
+    --panel-solid: #0b0b0f;
+    --panel-border: rgba(var(--accent-rgb), 0.38);
+    --danger: #ff7070;
+    --success: #4ade80;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+    --radius: 12px;
+}
+
+body.theme-1 {
+    --accent: #7fe9ff;
+    --accent-rgb: 127, 233, 255;
+    --text: #e8fbff;
+    --muted: #8fb9c6;
+    --danger: #ff8fa3;
+}
+
+body.theme-2 {
+    --accent: #ff69b4;
+    --accent-rgb: 255, 105, 180;
+    --text: #ffeaf5;
+    --muted: #c98fa9;
+    --danger: #ff7b7b;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+    margin: 0;
+    min-height: 100dvh;
+    overflow: hidden;
+    background-color: #020205;
+    color: var(--text);
+    font-family: 'Cinzel', 'Times New Roman', serif;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+button, input, select, textarea { font-family: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+#canvas-container { position: fixed; inset: 0; z-index: 1; }
+#canvas-container canvas { display: block; cursor: grab; }
+body.is-dragging #canvas-container canvas { cursor: grabbing; }
+
+#ui-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;
+    background: radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.32) 100%);
+}
+
+/* ---------- 标题 ---------- */
+#main-title {
+    position: absolute;
+    top: calc(4% + var(--safe-top));
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    text-align: center;
+    font-family: 'Cinzel', serif;
+    font-weight: 800;
+    font-size: clamp(28px, 6vw, 64px);
+    line-height: 1.15;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    pointer-events: none;
+    z-index: 20;
+    opacity: 0;
+    min-height: 1.2em;
+    padding: 0 4vw;
+    color: transparent;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-image: linear-gradient(180deg, #fffdf0 0%, #eacda3 30%, #d6ae7b 60%, #8b6c42 100%);
+    filter: drop-shadow(0 0 15px rgba(212, 175, 55, 0.6));
+    animation: titleFadeIn 1.8s ease-out forwards 0.4s;
+    transition: opacity 0.45s ease, filter 1s ease;
+}
+
+body.theme-1 #main-title {
+    background-image: linear-gradient(180deg, #ffffff 0%, #dff8ff 30%, #8fdcff 60%, #2a6f96 100%);
+    filter: drop-shadow(0 0 18px rgba(0, 255, 255, 0.55));
+}
+
+body.theme-2 #main-title {
+    background-image: linear-gradient(180deg, #fff5fa 0%, #ffd0e4 35%, #ff69b4 65%, #8a1b5c 100%);
+    filter: drop-shadow(0 0 18px rgba(255, 105, 180, 0.55));
+}
+
+#main-title.is-settled, #main-title.is-hidden { animation: none; }
+#main-title.is-settled { opacity: 1; }
+#main-title.is-hidden { opacity: 0; }
+
+@keyframes titleFadeIn {
+    from { opacity: 0; transform: translate(-50%, -18px); }
+    to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ---------- 手势状态 ---------- */
+#gesture-status {
+    position: fixed;
+    top: calc(16px + var(--safe-top));
+    left: calc(16px + var(--safe-left));
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border: 1px solid var(--panel-border);
+    border-radius: 999px;
+    background: var(--panel);
+    backdrop-filter: blur(8px);
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    transition: opacity 0.3s ease;
+}
+#gesture-status[hidden] { display: none; }
+#gesture-status .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #666;
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+#gesture-status.detected .dot { background: var(--success); box-shadow: 0 0 9px var(--success); }
+#gesture-status.detected { color: var(--text); }
+
+/* ---------- 菜单与按钮 ---------- */
+#btn-menu {
+    position: fixed;
+    top: calc(14px + var(--safe-top));
+    right: calc(14px + var(--safe-right));
+    z-index: 35;
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    border: 1px solid var(--panel-border);
+    border-radius: 50%;
+    background: var(--panel);
+    backdrop-filter: blur(10px);
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: opacity 0.3s ease, transform 0.2s ease, background 0.3s ease;
+}
+#btn-menu:hover { background: rgba(var(--accent-rgb), 0.16); transform: scale(1.05); }
+#btn-menu:active { transform: scale(0.96); }
+
+#top-right-controls {
+    position: fixed;
+    top: calc(72px + var(--safe-top));
+    right: calc(16px + var(--safe-right));
+    z-index: 30;
+    display: flex;
+    gap: 12px;
+    pointer-events: none;
+    transition: opacity 0.28s ease, transform 0.28s ease;
+}
+#top-right-controls .control-col {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: auto;
+}
+body.panel-collapsed #top-right-controls {
+    opacity: 0;
+    transform: translateY(-10px);
+    pointer-events: none;
+}
+
+.control-btn {
+    min-width: 104px;
+    padding: 9px 12px;
+    border: 1px solid var(--panel-border);
+    border-radius: 9px;
+    background: var(--panel);
+    backdrop-filter: blur(8px);
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease, transform 0.15s ease;
+}
+.control-btn:hover { background: rgba(var(--accent-rgb), 0.18); border-color: rgba(var(--accent-rgb), 0.8); color: #fff; transform: scale(1.03); }
+.control-btn:active { transform: scale(0.96); }
+.control-btn:disabled, .control-btn.disabled {
+    color: #666;
+    border-color: #3a3a3a;
+    cursor: default;
+    transform: none;
+    background: rgba(10, 10, 13, 0.7);
+}
+
+/* 全屏 / 展示模式 / 隐藏界面 */
+body.is-fullscreen #top-right-controls,
+body.is-fullscreen #btn-menu,
+body.display-mode #top-right-controls,
+body.display-mode #btn-menu,
+body.display-mode #gesture-status { opacity: 0; pointer-events: none; }
+
+body.ui-hidden #top-right-controls,
+body.ui-hidden #btn-menu,
+body.ui-hidden #gesture-status { opacity: 0; pointer-events: none; }
+body.ui-hidden #main-title { opacity: 0 !important; animation: none !important; }
+
+#exit-display {
+    position: fixed;
+    left: 50%;
+    bottom: calc(18px + var(--safe-bottom));
+    transform: translateX(-50%);
+    z-index: 60;
+    padding: 9px 16px;
+    border: 1px solid var(--panel-border);
+    border-radius: 999px;
+    background: rgba(8, 8, 12, 0.55);
+    backdrop-filter: blur(8px);
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    opacity: 0.28;
+    pointer-events: auto;
+    transition: opacity 0.3s ease, color 0.3s ease, background 0.3s ease;
+}
+#exit-display span { opacity: 0.6; margin-left: 4px; }
+#exit-display:hover { opacity: 1; color: var(--text); background: rgba(8, 8, 12, 0.8); }
+#exit-display[hidden] { display: none; }
+
+/* ---------- 抽屉 ---------- */
+.backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 110;
+    background: rgba(0, 0, 0, 0.55);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+.backdrop.show { opacity: 1; pointer-events: auto; }
+
+.drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100%;
+    width: min(92vw, 430px);
+    z-index: 120;
+    padding: calc(22px + var(--safe-top)) 20px calc(24px + var(--safe-bottom));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: linear-gradient(180deg, rgba(14, 14, 19, 0.97) 0%, rgba(7, 7, 10, 0.98) 100%);
+    border-left: 1px solid var(--panel-border);
+    box-shadow: -20px 0 60px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(16px);
+    transform: translateX(105%);
+    visibility: hidden;
+    transition: transform 0.36s cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0.36s;
+    pointer-events: auto;
+}
+.drawer.open { transform: translateX(0); visibility: visible; }
+
+.drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+.drawer-header h3 { margin: 0; color: var(--accent); font-size: 19px; letter-spacing: 0.08em; }
+.drawer-close {
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--panel-border);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+.drawer-close:hover { background: rgba(var(--accent-rgb), 0.16); }
+
+.drawer-section {
+    margin-bottom: 22px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+.drawer-section:last-child { border-bottom: 0; }
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.section-head h4 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: 0.05em; }
+.section-head h4 span { color: var(--muted); font-size: 12px; margin-left: 4px; }
+
+.field { display: flex; flex-direction: column; gap: 8px; margin: 0 0 18px; }
+.field > label { font-size: 13px; color: var(--text); }
+.field input[type="text"], .field select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid rgba(var(--accent-rgb), 0.3);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.055);
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.field input[type="text"]:focus, .field select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.15);
+}
+.field select option { background: var(--panel-solid); color: var(--text); }
+
+.setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+.setting-row strong { font-size: 13px; font-weight: 600; }
+.setting-row .hint { margin: 4px 0 0; }
+
+.hint { color: var(--muted); font-size: 12px; line-height: 1.65; margin: 8px 0 0; }
+.empty-hint { color: var(--muted); font-size: 12.5px; line-height: 1.7; }
+
+.mini-btn {
+    padding: 8px 12px;
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--accent);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    white-space: nowrap;
+}
+.mini-btn:hover { background: rgba(var(--accent-rgb), 0.16); color: #fff; }
+.mini-btn:disabled { color: #666; border-color: #3a3a3a; cursor: default; background: transparent; }
+.mini-btn.wide { width: 100%; margin-top: 10px; padding: 10px 12px; }
+.mini-btn.danger { color: var(--danger); border-color: rgba(255, 112, 112, 0.4); }
+.mini-btn.danger:hover { background: rgba(255, 112, 112, 0.14); color: #fff; }
+
+/* ---------- 照片 ---------- */
+.photo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.photo-card {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    border: 1px solid rgba(var(--accent-rgb), 0.25);
+    border-radius: 10px;
+    overflow: hidden;
+    background: #000;
+    cursor: pointer;
+}
+.photo-card img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.35s ease, opacity 0.25s ease; }
+.photo-card:hover img { transform: scale(1.06); opacity: 0.9; }
+.photo-card .photo-delete {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 26px;
+    height: 26px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.85;
+    transition: opacity 0.2s ease, background 0.2s ease;
+}
+.photo-card:hover .photo-delete, .photo-card:focus-within .photo-delete { opacity: 1; }
+.photo-card .photo-delete:hover { background: var(--danger); }
+.photo-card .photo-index {
+    position: absolute;
+    left: 6px;
+    top: 6px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+}
+.photo-card .photo-caption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 14px 8px 5px;
+    background: linear-gradient(0deg, rgba(0, 0, 0, 0.72), transparent);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 10.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    pointer-events: none;
+}
+
+/* ---------- 音乐 ---------- */
+#music-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid rgba(var(--accent-rgb), 0.22);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+}
+#music-name { color: var(--muted); font-size: 12.5px; word-break: break-all; line-height: 1.5; }
+.music-row { display: flex; align-items: center; gap: 8px; }
+.range-label { color: var(--muted); font-size: 11.5px; }
+input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); height: 22px; cursor: pointer; }
+
+/* ---------- 模态框 ---------- */
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.62);
+    backdrop-filter: blur(5px);
+    pointer-events: auto;
+}
+.modal[hidden] { display: none; }
+.modal-card {
+    width: min(94vw, 500px);
+    max-height: 86dvh;
+    overflow-y: auto;
+    padding: 22px;
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(18, 18, 24, 0.98), rgba(8, 8, 12, 0.99));
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.65);
+}
+.modal-card h3 { margin: 0 0 14px; color: var(--accent); font-size: 19px; letter-spacing: 0.06em; }
+.modal-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+
+#letter-text-input {
+    width: 100%;
+    height: 180px;
+    padding: 12px;
+    border: 1px solid rgba(var(--accent-rgb), 0.3);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+    font-family: 'Ma Shan Zheng', 'KaiTi', cursive;
+    font-size: 18px;
+    line-height: 1.7;
+    resize: vertical;
+    outline: none;
+}
+#letter-text-input:focus { border-color: var(--accent); }
+
+/* ---------- 手势说明 ---------- */
+.gesture-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.gesture-list li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    font-size: 13px;
+    color: var(--text);
+}
+.gesture-list li span { font-size: 20px; width: 26px; text-align: center; }
+
+/* ---------- 导出 ---------- */
+.export-options { display: flex; flex-direction: column; gap: 10px; }
+.export-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 13px 14px;
+    border: 1px solid rgba(var(--accent-rgb), 0.28);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.035);
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+.export-option:hover { background: rgba(var(--accent-rgb), 0.13); border-color: var(--accent); }
+.export-option strong { color: var(--accent); font-size: 14px; }
+.export-option span { color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+/* ---------- 书信全屏层 ---------- */
+#letter-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 150;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.45);
+    opacity: 0;
+    pointer-events: auto;
+    transition: opacity 1s ease;
+}
+.letter-paper {
+    position: relative;
+    width: min(88vw, calc(80dvh * 0.75));
+    height: min(80dvh, 760px);
+    aspect-ratio: 3 / 4;
+    padding: clamp(30px, 6vw, 56px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 252, 240, 0.15);
+    backdrop-filter: blur(3px);
+    display: flex;
+    flex-direction: column;
+    transform: translateY(18px);
+    transition: transform 1s cubic-bezier(0.2, 0.8, 0.2, 1);
+    overflow: hidden;
+}
+.letter-content {
+    flex: 1;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    font-family: 'Ma Shan Zheng', 'KaiTi', cursive;
+    font-size: clamp(16px, 2.4vh, 24px);
+    line-height: 1.85;
+    color: rgba(255, 255, 255, 0.92);
+    text-shadow: 0 0 5px rgba(255, 215, 0, 0.3);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.letter-content::-webkit-scrollbar { width: 6px; }
+.letter-content::-webkit-scrollbar-thumb { background: rgba(var(--accent-rgb), 0.35); border-radius: 3px; }
+.letter-hint { margin-top: 10px; color: rgba(255, 255, 255, 0.4); font-size: 11px; text-align: center; letter-spacing: 0.05em; }
+.letter-close-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 30px;
+    height: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    color: rgba(255, 255, 255, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    background: rgba(0, 0, 0, 0.15);
+    transition: background 0.25s ease, color 0.25s ease;
+    z-index: 2;
+}
+.letter-close-btn:hover { background: rgba(255, 255, 255, 0.2); color: #fff; }
+.cursor::after { content: '|'; animation: blink 1s step-end infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ---------- Toast ---------- */
+#toast-container {
+    position: fixed;
+    left: 50%;
+    bottom: calc(24px + var(--safe-bottom));
+    transform: translateX(-50%);
+    z-index: 300;
+    width: min(92vw, 430px);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+.toast {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    background: rgba(12, 12, 17, 0.94);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.5;
+    animation: toastIn 0.25s ease both;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.toast.hide { opacity: 0; transform: translateY(8px); }
+.toast.success { border-color: rgba(74, 222, 128, 0.5); }
+.toast.error { border-color: rgba(255, 112, 112, 0.6); }
+.toast .toast-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.toast .toast-actions button { padding: 5px 10px; }
+@keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ---------- Loader ---------- */
+#loader {
+    position: fixed;
+    inset: 0;
+    z-index: 400;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    transition: opacity 1s ease;
+    pointer-events: none;
+}
+.loader-inner { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.spinner {
+    width: 42px;
+    height: 42px;
+    border: 2px solid rgba(var(--accent-rgb), 0.15);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+.loader-text { color: var(--muted); font-size: 12px; letter-spacing: 0.2em; }
+#loader .loader-error { color: var(--accent); font-size: 13.5px; line-height: 2; letter-spacing: 0.06em; text-align: center; padding: 0 24px; }
+#loader .loader-error small { display: block; color: var(--muted); font-size: 12px; letter-spacing: 0.02em; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+#webcam-wrapper { position: fixed; left: -9999px; top: 0; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; z-index: -1; }
+#webcam { width: 1px; height: 1px; }
+
+/* ---------- 响应式 ---------- */
+@media (max-width: 680px) {
+    #btn-menu { width: 42px; height: 42px; top: calc(10px + var(--safe-top)); right: calc(10px + var(--safe-right)); }
+    #top-right-controls {
+        top: auto;
+        bottom: calc(12px + var(--safe-bottom));
+        left: calc(12px + var(--safe-left));
+        right: calc(12px + var(--safe-right));
+        justify-content: center;
+        gap: 8px;
+    }
+    #top-right-controls .control-col { flex: 1; min-width: 0; gap: 8px; }
+    .control-btn { min-width: 0; width: 100%; padding: 9px 4px; font-size: 12.5px; }
+    #main-title { top: calc(4% + var(--safe-top)); font-size: clamp(26px, 8.4vw, 52px); letter-spacing: 0.08em; }
+    #gesture-status { top: calc(10px + var(--safe-top)); left: calc(10px + var(--safe-left)); font-size: 11px; }
+    .letter-paper { width: min(92vw, calc(78dvh * 0.75)); height: min(78dvh, 680px); padding: 26px 22px; }
+    .photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+    /* 恢复存档提示会固定在底部，展开菜单时把面板抬高，避免遮挡按钮 */
+    body.has-sticky-toast #top-right-controls {
+        bottom: calc(132px + var(--safe-bottom));
+        max-height: calc(100dvh - 250px);
+        overflow-y: auto;
+        padding-bottom: 4px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+    </style>
+</head>
+
+<body class="theme-0">
+    <div id="loader"><div class="loader-inner"><div class="spinner"></div><div class="loader-text">正在点亮…</div></div></div>
+
+    <div id="canvas-container" aria-label="3D 圣诞树场景"></div>
+
+    <div id="ui-layer">
+        <div id="main-title" aria-live="polite"></div>
+
+        <div id="gesture-status" hidden>
+            <span class="dot"></span>
+            <span id="gesture-status-text">手势已开启</span>
+        </div>
+
+        <button id="btn-menu" type="button" aria-label="打开菜单" aria-expanded="false">菜单</button>
+
+        <div id="top-right-controls">
+            <div class="control-col" id="col-media">
+                <button id="btn-media" class="control-btn" type="button">素材库</button>
+                <button id="btn-write-letter" class="control-btn" type="button">编辑书信</button>
+                <button id="btn-view-letter" class="control-btn" type="button">查看书信</button>
+                <button id="btn-settings" class="control-btn" type="button">设置</button>
+                <button id="btn-display" class="control-btn" type="button">展示模式</button>
+            </div>
+            <div class="control-col" id="col-system">
+                <button id="btn-import" class="control-btn" type="button">导入</button>
+                <button id="btn-export" class="control-btn" type="button">导出</button>
+                <button id="btn-fullscreen" class="control-btn" type="button">全屏</button>
+                <button id="btn-switch-theme" class="control-btn" type="button">换主题</button>
+                <button id="btn-hide-ui" class="control-btn" type="button">隐藏界面</button>
+            </div>
+        </div>
+
+        <input type="file" id="file-input" accept="image/*" multiple hidden>
+        <input type="file" id="music-input" accept="audio/*" hidden>
+        <input type="file" id="import-input" accept=".json,.html,.htm,application/json,text/html" hidden>
+    </div>
+
+    <button id="exit-display" type="button" hidden>退出展示 <span>Esc</span></button>
+
+    <div id="backdrop" class="backdrop"></div>
+
+    <aside id="media-panel" class="drawer" role="dialog" aria-modal="true" aria-labelledby="media-title" aria-hidden="true" inert>
+        <div class="drawer-header">
+            <h3 id="media-title">素材库</h3>
+            <button class="drawer-close" type="button" data-close="media-panel" aria-label="关闭素材库">×</button>
+        </div>
+
+        <section class="drawer-section">
+            <div class="section-head">
+                <h4>照片 <span id="photo-count">0/12</span></h4>
+                <button id="btn-add-photo" class="mini-btn" type="button">添加照片</button>
+            </div>
+            <div id="photo-grid" class="photo-grid"></div>
+            <p id="photo-empty" class="empty-hint">还没有照片。点击“添加照片”，或直接把图片拖进页面。</p>
+            <button id="btn-clear-photos" class="mini-btn wide danger" type="button" hidden>清空照片</button>
+        </section>
+
+        <section class="drawer-section">
+            <div class="section-head"><h4>背景音乐</h4></div>
+            <div id="music-card">
+                <div id="music-name">未添加音乐</div>
+                <div class="music-row">
+                    <button id="btn-music-play" class="mini-btn" type="button" disabled>播放</button>
+                    <button id="btn-music-mute" class="mini-btn" type="button" disabled>静音</button>
+                </div>
+                <div class="music-row">
+                    <span class="range-label">音量</span>
+                    <input id="music-volume" type="range" min="0" max="100" value="70" aria-label="音乐音量">
+                </div>
+                <button id="btn-bg-music" class="mini-btn" type="button">上传音乐</button>
+            </div>
+        </section>
+    </aside>
+
+    <aside id="settings-panel" class="drawer" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-hidden="true" inert>
+        <div class="drawer-header">
+            <h3 id="settings-title">设置</h3>
+            <button class="drawer-close" type="button" data-close="settings-panel" aria-label="关闭设置">×</button>
+        </div>
+
+        <div class="field">
+            <label for="title-input">页面标题</label>
+            <input id="title-input" type="text" maxlength="60" placeholder="输入标题，留空则不显示" autocomplete="off">
+        </div>
+
+        <div class="field">
+            <label for="theme-select">主题</label>
+            <select id="theme-select"></select>
+        </div>
+
+        <div class="field">
+            <label for="quality-select">画质</label>
+            <select id="quality-select">
+                <option value="auto">自动（推荐）</option>
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+            </select>
+            <p class="hint">切换画质会重建粒子，可能需要 1 秒。</p>
+        </div>
+
+        <div class="setting-row">
+            <div>
+                <strong>摄像头手势</strong>
+                <p class="hint" id="camera-hint">关闭状态。摄像头画面只在本地处理，不会上传。</p>
+            </div>
+            <button id="btn-camera-toggle" class="mini-btn" type="button">开启</button>
+        </div>
+
+        <div class="setting-row">
+            <div>
+                <strong>手势换主题</strong>
+                <p class="hint" id="gesture-switch-hint">当前开启：竖起大拇指或比 V 切换主题</p>
+            </div>
+            <button id="btn-gesture-switch" class="mini-btn danger" type="button" aria-label="关闭手势换主题">关闭</button>
+        </div>
+
+        <button id="btn-gesture-help" class="mini-btn wide" type="button">查看手势说明</button>
+        <button id="btn-clear-save" class="mini-btn wide danger" type="button">清除自动存档</button>
+        <p class="hint">自动保存会记住标题、照片、音乐和书信，仅保存在本机浏览器。</p>
+    </aside>
+
+    <div id="letter-editor-modal" class="modal" hidden>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="letter-editor-title">
+            <h3 id="letter-editor-title">撰写你的心意</h3>
+            <textarea id="letter-text-input" placeholder="在这里写下你想说的话……支持换行和 emoji"></textarea>
+            <div class="modal-actions">
+                <button id="btn-cancel-letter" class="mini-btn" type="button">取消</button>
+                <button id="btn-save-letter" class="mini-btn" type="button">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="letter-overlay" aria-hidden="true">
+        <div class="letter-paper" role="dialog" aria-modal="true" aria-label="书信">
+            <div class="letter-close-btn" id="btn-close-letter-mode" role="button" tabindex="0" aria-label="关闭书信">×</div>
+            <div class="letter-content" id="letter-content-display"></div>
+            <div class="letter-hint" id="letter-hint">点击内容可跳过打字</div>
+        </div>
+    </div>
+
+    <div id="gesture-modal" class="modal" hidden>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="gesture-title">
+            <h3 id="gesture-title">手势玩法</h3>
+            <ul class="gesture-list">
+                <li><span>👌</span> OK 手势：打开书信</li>
+                <li><span>☝️</span> 食指指向：聚焦照片或星星</li>
+                <li><span>🖐️</span> 张开手掌：装饰散开并随手掌旋转</li>
+                <li><span>👍</span> 竖起大拇指：切换主题</li>
+                <li><span>✌️</span> 比 V：切换主题</li>
+            </ul>
+            <p class="hint">摄像头画面只在本机浏览器内处理，不会上传。可随时在设置中关闭。</p>
+            <div class="modal-actions">
+                <button id="btn-gesture-cancel" class="mini-btn" type="button">取消</button>
+                <button id="btn-gesture-start" class="mini-btn" type="button">启用摄像头</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="export-modal" class="modal" hidden>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="export-title">
+            <h3 id="export-title">导出</h3>
+            <p class="hint" style="margin-top:0">HTML 会把照片和音乐一起打包，可直接双击打开或分享；仍然需要联网加载 Three.js。</p>
+            <div class="export-options">
+                <button id="btn-export-html-display" class="export-option" type="button">
+                    <strong>展示版网页</strong>
+                    <span>打开即进入展示模式，适合送给对方</span>
+                </button>
+                <button id="btn-export-html-edit" class="export-option" type="button">
+                    <strong>编辑版网页</strong>
+                    <span>保留编辑按钮，方便自己继续修改</span>
+                </button>
+                <button id="btn-export-json" class="export-option" type="button">
+                    <strong>仅导出配置 JSON</strong>
+                    <span>用于备份或再次导入，图片和音乐会一起内嵌</span>
+                </button>
+            </div>
+            <div class="modal-actions">
+                <button class="mini-btn" type="button" data-close="export-modal">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="confirm-modal" class="modal" hidden>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+            <h3 id="confirm-title">请确认</h3>
+            <p id="confirm-message" style="margin:0;line-height:1.8;font-size:14px"></p>
+            <div class="modal-actions">
+                <button id="btn-confirm-cancel" class="mini-btn" type="button">取消</button>
+                <button id="btn-confirm-ok" class="mini-btn danger" type="button">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" aria-live="polite"></div>
+
+    <div id="webcam-wrapper">
+        <video id="webcam" autoplay playsinline webkit-playsinline muted></video>
+    </div>
+
+    <audio id="bg-music" loop crossorigin="anonymous"></audio>
+
+    <script type="application/json" id="scene-data"></script>
+
+    <script>
+        // CDN / 模块加载失败时给出提示，避免加载动画一直转圈
+        window.__SCENE_READY__ = false;
+        (function () {
+            var showLoadError = function () {
+                if (window.__SCENE_READY__) return;
+                var loader = document.getElementById('loader');
+                if (loader) loader.innerHTML = '<div class="loader-error">资源加载失败<small>请检查网络连接后刷新页面</small></div>';
+            };
+            window.addEventListener('error', function (e) {
+                if (e && e.target && e.target.tagName === 'SCRIPT') showLoadError();
+            }, true);
+            window.addEventListener('unhandledrejection', showLoadError);
+            setTimeout(showLoadError, 20000);
+        })();
+    </script>
+
+    <script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
+
+/* ============================================================
+ * 基础工具与配置
+ * ============================================================ */
+
+const $ = (id) => document.getElementById(id);
+const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+const clamp = THREE.MathUtils.clamp;
+const lerp = THREE.MathUtils.lerp;
+const nowMs = () => performance.now();
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const IS_COARSE = window.matchMedia('(pointer: coarse)').matches;
+const SETTINGS_KEY = 'luxury-tree-settings-v1';
+const DB_NAME = 'luxury-tree';
+const DB_STORE = 'state';
+const DB_KEY = 'current';
+
+const CONFIG = {
+    colors: {
+        bg: 0x020205,
+        gold: 0xffd700,
+        green: 0x004400,
+        red: 0x880000,
+        iceBlue: 0xaaddff,
+        iceCyan: 0x00ffff,
+        iceMagenta: 0xff00cc,
+        white: 0xffffff,
+        barbieHot: 0xff1694,
+        barbieSoft: 0xffb7c5
+    },
+    camera: { z: 55, minZ: 32, maxZ: 95 },
+    particles: { treeHeight: 28, treeRadius: 9, snowSpeed: 10 },
+    gestures: {
+        palmOpenThreshold: 0.34,
+        sensitivity: 6.0,
+        focusReleaseDelay: 1200,
+        stableMs: 170,
+        themeCooldown: 2000,
+        letterCooldown: 1200
+    },
+    photo: { maxSize: 1600, quality: 0.86, maxCount: 12 },
+    limits: { imageBytes: 25 * 1024 * 1024, musicBytes: 50 * 1024 * 1024 },
+    quality: {
+        high: { particles: 1800, dust: 1500, snow: 2500, hearts: 1500, galaxy: 3000, dpr: 1.5, bloom: true, bloomStrength: 0.5, bloomRadius: 0.5 },
+        medium: { particles: 1200, dust: 900, snow: 1800, hearts: 1200, galaxy: 2200, dpr: 1.25, bloom: true, bloomStrength: 0.42, bloomRadius: 0.45 },
+        low: { particles: 700, dust: 450, snow: 1000, hearts: 800, galaxy: 1500, dpr: 1.0, bloom: false, bloomStrength: 0.3, bloomRadius: 0.4 }
+    }
+};
+
+const THEMES = [
+    {
+        id: 0,
+        name: '鎏金',
+        exposure: 1.0,
+        fog: 0x020205,
+        autoSpin: 0.42,
+        background: 'galaxy',
+        mats: { BOX: 'green', GOLD_BOX: 'gold', GOLD_SPHERE: 'gold', RED: 'red', CANE: 'candy' },
+        frame: 'frameGold',
+        star: 'starGold',
+        halo: 0xffaa00,
+        border: 0xffffff,
+        dust: 0xffffee
+    },
+    {
+        id: 1,
+        name: '冰蓝',
+        exposure: 1.18,
+        fog: 0x000510,
+        autoSpin: 0.6,
+        background: 'snow',
+        mats: { BOX: 'ice', GOLD_BOX: 'ice', GOLD_SPHERE: 'frozenCyan', RED: 'frozenMagenta', CANE: 'snow' },
+        frame: 'frameIce',
+        star: 'starIce',
+        halo: 0x00ffff,
+        border: 0xffffff,
+        dust: 0x00ffff
+    },
+    {
+        id: 2,
+        name: '芭比',
+        exposure: 0.92,
+        fog: 0x1a0510,
+        autoSpin: 0.42,
+        background: 'heart',
+        mats: { BOX: 'barbieSoft', GOLD_BOX: 'barbieMain', GOLD_SPHERE: 'barbieMain', RED: 'pearl', CANE: 'barbieMain' },
+        frame: 'frameBarbie',
+        star: 'starBarbie',
+        halo: 0xff1694,
+        border: 0xffb7c5,
+        dust: 0xffb7c5
+    }
+];
+
+const PARTICLE_TYPES = [
+    { key: 'BOX', geometry: 'box', ratio: 0.35 },
+    { key: 'GOLD_BOX', geometry: 'box', ratio: 0.35 },
+    { key: 'GOLD_SPHERE', geometry: 'sphere', ratio: 0.20 },
+    { key: 'RED', geometry: 'sphere', ratio: 0.06 },
+    { key: 'CANE', geometry: 'cane', ratio: 0.04 }
+];
+
+const STATE = {
+    mode: 'TREE',
+    focusTarget: null,
+    focusSource: null,
+    currentPhotoIndex: -1,
+
+    themeIndex: 0,
+    themeTransition: null,
+    resolvedQuality: 'high',
+    quality: 'auto',
+
+    hand: { detected: false, x: 0, y: 0 },
+    handActive: false,
+    cameraOn: false,
+    stream: null,
+    lastHandSeen: 0,
+
+    rotation: { x: 0, y: 0 },
+    spinVel: { x: 0, y: 0 },
+    time: 0,
+    scatterScale: 1,
+    gestureBaseSpread: null,
+    palmCenter: { x: 0.5, y: 0.5 },
+    hasPalmCenter: false,
+    gestureCandidate: 'TREE',
+    gestureSince: 0,
+    gestureDebounceTimer: 0,
+    themeGestureSince: 0,
+    themeGestureLocked: false,
+    okSince: 0,
+    isGestureSwitchEnabled: true,
+
+    starMesh: null,
+    starHaloMesh: null,
+
+    letterContent: '',
+    letterToken: 0,
+    letterTyper: null,
+    letterStartTimer: null,
+    letterHideTimer: null,
+    letterLastTriggerTime: 0,
+
+    musicData: null,
+    musicName: '',
+    volume: 0.7,
+    muted: false,
+    fadeToken: 0,
+
+    uiHidden: false,
+    displayMode: false,
+    dragging: false,
+    manualUntil: 0,
+    cameraZ: CONFIG.camera.z,
+    cameraZTarget: CONFIG.camera.z,
+
+    saveTimer: null,
+    saveDirty: false,
+    saveErrorShown: false,
+    stickyToastCount: 0,
+    applying: false
+};
+
+/* ============================================================
+ * 全局对象
+ * ============================================================ */
+
+let scene, camera, renderer, composer, bloomPass;
+const clock = new THREE.Clock();
+
+let mainGroup, starGroup, bgGroup, photoMeshGroup;
+let galaxySystem = null;
+let snowSystem = null;
+let heartSystem = null;
+let particleGroups = [];
+let photoItems = [];
+
+let handLandmarker = null;
+let handModelPromise = null;
+let video = null;
+let lastVideoTime = -1;
+
+let caneTexture, snowTexture, heartTexture, glowTexture;
+let matLib = {};
+let geometries = {};
+let audioEl = null;
+let activeEmissiveMats = [];
+let activeDrawer = null;
+let confirmResolver = null;
+
+const _tempVec = new THREE.Vector3();
+const _targetVec = new THREE.Vector3();
+const _invMatrix = new THREE.Matrix4();
+const _dummy = new THREE.Object3D();
+const _raycaster = new THREE.Raycaster();
+const _pointerNdc = new THREE.Vector2();
+const _colorA = new THREE.Color();
+
+/* ============================================================
+ * 启动
+ * ============================================================ */
+
+async function init() {
+    try {
+        loadSettings();
+        audioEl = $('bg-music');
+        STATE.resolvedQuality = resolveQualityName();
+
+        initThree();
+        setupEnvironment();
+        setupLights();
+        createGeometries();
+        createTextures();
+        createMaterials();
+        createBackgrounds();
+        createParticles();
+        createStarTopper();
+        setupPostProcessing();
+
+        setupUI();
+        setupPointerControls();
+        switchTheme(0, { instant: true, silent: true });
+        updateMediaPanel();
+        updateMusicUI();
+        updateSettingsUI();
+        applyQualityVisuals();
+
+        await loadInitialScene();
+
+        const loader = $('loader');
+        if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(() => loader.remove(), 1000);
+        }
+        window.__SCENE_READY__ = true;
+        animate();
+    } catch (err) {
+        window.__SCENE_READY__ = true;
+        console.error('初始化失败：', err);
+        const loader = $('loader');
+        if (loader) {
+            loader.innerHTML = '<div class="loader-error">场景初始化失败<small>请确认浏览器支持 WebGL，且网络可访问 CDN</small></div>';
+        }
+    }
+}
+
+function initThree() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(CONFIG.colors.bg);
+    scene.fog = new THREE.FogExp2(CONFIG.colors.bg, 0.012);
+
+    camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 4000);
+    camera.position.set(0, 0, STATE.cameraZ);
+
+    renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', depth: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, CONFIG.quality[STATE.resolvedQuality].dpr));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
+    $('canvas-container').appendChild(renderer.domElement);
+
+    bgGroup = new THREE.Group();
+    scene.add(bgGroup);
+    mainGroup = new THREE.Group();
+    mainGroup.rotation.x = 0.1;
+    scene.add(mainGroup);
+    starGroup = new THREE.Group();
+    mainGroup.add(starGroup);
+    photoMeshGroup = new THREE.Group();
+    mainGroup.add(photoMeshGroup);
+}
+
+function setupEnvironment() {
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    pmrem.compileEquirectangularShader();
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
+}
+
+function setupLights() {
+    scene.add(new THREE.AmbientLight(0xffffff, 0.2));
+
+    const bottomLight = new THREE.PointLight(CONFIG.colors.gold, 3, 40);
+    bottomLight.position.set(0, -10, 10);
+    mainGroup.add(bottomLight);
+
+    const spotGold = new THREE.SpotLight(0xfff0dd, 800);
+    spotGold.position.set(40, 60, 40);
+    spotGold.angle = 0.4;
+    spotGold.decay = 2;
+    scene.add(spotGold);
+
+    const spotBlue = new THREE.SpotLight(0x4455ff, 400);
+    spotBlue.position.set(-40, 10, -30);
+    spotBlue.lookAt(0, 0, 0);
+    scene.add(spotBlue);
+}
+
+function setupPostProcessing() {
+    const q = CONFIG.quality[STATE.resolvedQuality];
+    bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), q.bloomStrength, q.bloomRadius, 0.75);
+    bloomPass.threshold = 0.75;
+    bloomPass.strength = q.bloomStrength;
+    bloomPass.radius = q.bloomRadius;
+
+    composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    composer.addPass(bloomPass);
+}
+
+function createGeometries() {
+    geometries.box = new THREE.BoxGeometry(0.45, 0.45, 0.45);
+    geometries.sphere = new THREE.SphereGeometry(0.5, 16, 16);
+    const curve = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0, -0.5, 0),
+        new THREE.Vector3(0, 0.3, 0),
+        new THREE.Vector3(0.1, 0.5, 0),
+        new THREE.Vector3(0.3, 0.4, 0)
+    ]);
+    geometries.cane = new THREE.TubeGeometry(curve, 8, 0.08, 6, false);
+    geometries.dust = new THREE.OctahedronGeometry(0.1, 0);
+}
+
+function createTextures() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 128, 128);
+    ctx.fillStyle = '#aa0000';
+    ctx.beginPath();
+    for (let i = -128; i < 256; i += 32) {
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i + 32, 128);
+        ctx.lineTo(i + 16, 128);
+        ctx.lineTo(i - 16, 0);
+    }
+    ctx.fill();
+    caneTexture = new THREE.CanvasTexture(canvas);
+    caneTexture.colorSpace = THREE.SRGBColorSpace;
+    caneTexture.wrapS = THREE.RepeatWrapping;
+    caneTexture.wrapT = THREE.RepeatWrapping;
+    caneTexture.repeat.set(3, 3);
+
+    const snowCvs = document.createElement('canvas');
+    snowCvs.width = 32;
+    snowCvs.height = 32;
+    const sCtx = snowCvs.getContext('2d');
+    const snowGrad = sCtx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    snowGrad.addColorStop(0, 'rgba(255,255,255,1)');
+    snowGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    sCtx.fillStyle = snowGrad;
+    sCtx.fillRect(0, 0, 32, 32);
+    snowTexture = new THREE.CanvasTexture(snowCvs);
+    snowTexture.colorSpace = THREE.SRGBColorSpace;
+
+    const hCvs = document.createElement('canvas');
+    hCvs.width = 64;
+    hCvs.height = 64;
+    const hCtx = hCvs.getContext('2d');
+    hCtx.fillStyle = '#ffffff';
+    hCtx.beginPath();
+    hCtx.moveTo(32, 20);
+    hCtx.bezierCurveTo(32, 17, 30, 10, 20, 10);
+    hCtx.bezierCurveTo(10, 10, 10, 25, 10, 25);
+    hCtx.bezierCurveTo(10, 35, 20, 42, 32, 55);
+    hCtx.bezierCurveTo(44, 42, 54, 35, 54, 25);
+    hCtx.bezierCurveTo(54, 25, 54, 10, 44, 10);
+    hCtx.bezierCurveTo(36, 10, 32, 17, 32, 20);
+    hCtx.fill();
+    heartTexture = new THREE.CanvasTexture(hCvs);
+    heartTexture.colorSpace = THREE.SRGBColorSpace;
+
+    // 程序化光晕，避免依赖外部图片
+    const gCvs = document.createElement('canvas');
+    gCvs.width = 128;
+    gCvs.height = 128;
+    const gCtx = gCvs.getContext('2d');
+    const gGrad = gCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gGrad.addColorStop(0, 'rgba(255,255,255,1)');
+    gGrad.addColorStop(0.25, 'rgba(255,255,255,0.75)');
+    gGrad.addColorStop(0.6, 'rgba(255,255,255,0.18)');
+    gGrad.addColorStop(1, 'rgba(255,255,255,0)');
+    gCtx.fillStyle = gGrad;
+    gCtx.fillRect(0, 0, 128, 128);
+    glowTexture = new THREE.CanvasTexture(gCvs);
+    glowTexture.colorSpace = THREE.SRGBColorSpace;
+}
+
+function createMaterials() {
+    matLib.gold = new THREE.MeshStandardMaterial({
+        color: CONFIG.colors.gold, metalness: 1.0, roughness: 0.15,
+        envMapIntensity: 2.5, emissive: 0x664400, emissiveIntensity: 0.2
+    });
+    matLib.green = new THREE.MeshStandardMaterial({
+        color: CONFIG.colors.green, metalness: 0.4, roughness: 0.3,
+        emissive: 0x001100, emissiveIntensity: 0.1
+    });
+    matLib.red = new THREE.MeshPhysicalMaterial({
+        color: CONFIG.colors.red, metalness: 0.6, roughness: 0.2,
+        clearcoat: 1.0, emissive: 0x330000, emissiveIntensity: 0.4
+    });
+    matLib.candy = new THREE.MeshStandardMaterial({
+        map: caneTexture, roughness: 0.3, metalness: 0.1, emissive: 0x222222
+    });
+    matLib.starGold = new THREE.MeshStandardMaterial({
+        color: 0xffdd88, emissive: 0xffaa00, emissiveIntensity: 2.0,
+        metalness: 1.0, roughness: 0
+    });
+    matLib.frameGold = new THREE.MeshStandardMaterial({
+        color: CONFIG.colors.gold, metalness: 1.0, roughness: 0.2
+    });
+
+    // 粒子用“假玻璃”：去掉 transmission，避免上千个实例触发昂贵的透射渲染
+    matLib.ice = new THREE.MeshPhysicalMaterial({
+        color: 0xcdf4ff, metalness: 0.25, roughness: 0.06,
+        clearcoat: 1.0, clearcoatRoughness: 0.05, envMapIntensity: 2.2,
+        iridescence: 1.0, iridescenceIOR: 1.3, iridescenceThicknessRange: [100, 400],
+        emissive: CONFIG.colors.iceBlue, emissiveIntensity: 0.35
+    });
+    // 相框数量很少，保留真实透射效果
+    matLib.iceFrame = new THREE.MeshPhysicalMaterial({
+        color: 0xffffff, metalness: 0.1, roughness: 0.05,
+        transmission: 0.92, thickness: 1.5, ior: 1.8,
+        clearcoat: 1.0, envMapIntensity: 2.0,
+        iridescence: 1.0, iridescenceIOR: 1.3, iridescenceThicknessRange: [100, 400],
+        emissive: CONFIG.colors.iceBlue, emissiveIntensity: 0.3
+    });
+    matLib.frozenCyan = new THREE.MeshPhysicalMaterial({
+        color: CONFIG.colors.iceCyan, metalness: 0.8, roughness: 0.2,
+        emissive: CONFIG.colors.iceCyan, emissiveIntensity: 2.0, clearcoat: 1.0
+    });
+    matLib.frozenMagenta = new THREE.MeshPhysicalMaterial({
+        color: CONFIG.colors.iceMagenta, metalness: 0.5, roughness: 0.2,
+        emissive: CONFIG.colors.iceMagenta, emissiveIntensity: 1.5, clearcoat: 1.0
+    });
+    matLib.starIce = new THREE.MeshPhysicalMaterial({
+        color: CONFIG.colors.iceCyan, emissive: 0xffffff, emissiveIntensity: 3.0,
+        metalness: 0.2, roughness: 0, transmission: 0.6, thickness: 3.0
+    });
+    matLib.snow = new THREE.MeshStandardMaterial({
+        color: 0xffffff, metalness: 0.1, roughness: 0.8,
+        emissive: 0xaaaaaa, emissiveIntensity: 0.8
+    });
+
+    matLib.barbieMain = new THREE.MeshPhysicalMaterial({
+        color: CONFIG.colors.barbieHot, metalness: 0.2, roughness: 0.1,
+        clearcoat: 1.0, emissive: 0x440022, emissiveIntensity: 0.3
+    });
+    matLib.barbieSoft = new THREE.MeshStandardMaterial({
+        color: CONFIG.colors.barbieSoft, metalness: 0.1, roughness: 0.4,
+        emissive: 0x442233, emissiveIntensity: 0.2
+    });
+    matLib.pearl = new THREE.MeshPhysicalMaterial({
+        color: 0xffffff, metalness: 0.9, roughness: 0.1,
+        clearcoat: 1.0, iridescence: 1.0, iridescenceIOR: 1.3
+    });
+    matLib.starBarbie = new THREE.MeshStandardMaterial({
+        color: CONFIG.colors.barbieHot, emissive: 0xff0088, emissiveIntensity: 4.0,
+        metalness: 0.5, roughness: 0.1
+    });
+
+    matLib.frameIce = matLib.iceFrame;
+    matLib.frameBarbie = matLib.barbieMain;
+
+    matLib.snowBorder = new THREE.MeshBasicMaterial({
+        color: 0xffffff, transparent: true, opacity: 0.8, side: THREE.BackSide
+    });
+    matLib.dust = new THREE.MeshBasicMaterial({
+        color: 0xffffee, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.85
+    });
+
+    Object.values(matLib).forEach((mat) => {
+        if (mat && mat.emissive) mat.userData.baseEmissive = mat.emissiveIntensity;
+    });
+}
+
+/* ============================================================
+ * 设置 / 画质
+ * ============================================================ */
+
+function resolveQualityName() {
+    if (STATE.quality === 'auto') {
+        if (IS_COARSE || window.innerWidth < 720) return 'low';
+        if ((navigator.hardwareConcurrency || 8) <= 4) return 'medium';
+        return 'high';
+    }
+    return CONFIG.quality[STATE.quality] ? STATE.quality : 'high';
+}
+
+function loadSettings() {
+    try {
+        const raw = localStorage.getItem(SETTINGS_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        if (['auto', 'high', 'medium', 'low'].includes(data.quality)) STATE.quality = data.quality;
+        if (Number.isFinite(data.volume)) STATE.volume = clamp(data.volume, 0, 1);
+        if (typeof data.muted === 'boolean') STATE.muted = data.muted;
+        if (typeof data.gestureSwitch === 'boolean') STATE.isGestureSwitchEnabled = data.gestureSwitch;
+    } catch (err) {
+        console.warn('读取设置失败：', err);
+    }
+}
+
+function saveSettings() {
+    try {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+            quality: STATE.quality,
+            volume: STATE.volume,
+            muted: STATE.muted,
+            gestureSwitch: STATE.isGestureSwitchEnabled
+        }));
+    } catch (err) {
+        console.warn('保存设置失败：', err);
+    }
+}
+
+function applyQualityVisuals() {
+    const q = CONFIG.quality[STATE.resolvedQuality];
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, q.dpr));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
+    if (bloomPass) {
+        bloomPass.enabled = q.bloom;
+        bloomPass.strength = q.bloomStrength;
+        bloomPass.radius = q.bloomRadius;
+    }
+}
+
+function applyQuality(name, { rebuild = true } = {}) {
+    STATE.quality = name;
+    STATE.resolvedQuality = resolveQualityName();
+    saveSettings();
+    applyQualityVisuals();
+
+    if (rebuild) {
+        disposeParticles();
+        createParticles();
+        disposeBackgrounds();
+        createBackgrounds();
+        switchTheme(STATE.themeIndex, { instant: true, silent: true });
+    }
+
+    const select = $('quality-select');
+    if (select) select.value = name;
+}
+
+/* ============================================================
+ * InstancedMesh 粒子
+ * ============================================================ */
+
+function generateTreePosition(allowSpiral = true) {
+    const h = CONFIG.particles.treeHeight;
+    let t = Math.random();
+    const pos = new THREE.Vector3();
+
+    if (allowSpiral && Math.random() > 0.7) {
+        const y = (t * h) - h / 2;
+        const angle = t * Math.PI * 12;
+        const rBase = CONFIG.particles.treeRadius * (1.0 - t);
+        pos.set(Math.cos(angle) * rBase, y, Math.sin(angle) * rBase);
+    } else {
+        t = Math.pow(t, 0.8);
+        const y = (t * h) - h / 2;
+        const angle = Math.random() * Math.PI * 2;
+        const radius = Math.max(0.5, CONFIG.particles.treeRadius * (1.0 - t)) * Math.sqrt(Math.random());
+        pos.set(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
+    }
+    return pos;
+}
+
+function generateScatterPosition(isDust = false) {
+    const radius = isDust ? (15 + Math.random() * 25) : (10 + Math.random() * 15);
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    return new THREE.Vector3(
+        radius * Math.sin(phi) * Math.cos(theta),
+        radius * Math.sin(phi) * Math.sin(theta),
+        radius * Math.cos(phi)
+    );
+}
+
+function createParticleItem(isDust = false) {
+    return {
+        treePos: generateTreePosition(!isDust),
+        scatterPos: generateScatterPosition(isDust),
+        currentPos: new THREE.Vector3(),
+        currentScale: 1,
+        baseScale: 1,
+        offset: Math.random() * 100,
+        speed: 0.5 + Math.random(),
+        quaternion: new THREE.Quaternion().setFromEuler(new THREE.Euler(
+            Math.random() * 6, Math.random() * 6, Math.random() * 6
+        ))
+    };
+}
+
+function createParticles() {
+    const q = CONFIG.quality[STATE.resolvedQuality];
+    const total = q.particles;
+    const theme = THEMES[STATE.themeIndex];
+    const counts = PARTICLE_TYPES.map((def) => Math.round(total * def.ratio));
+    counts[counts.length - 1] = total - counts.slice(0, -1).reduce((a, b) => a + b, 0);
+
+    PARTICLE_TYPES.forEach((def, groupIndex) => {
+        const count = counts[groupIndex];
+        if (count <= 0) return;
+
+        const material = matLib[theme.mats[def.key]] || matLib.gold;
+        const mesh = new THREE.InstancedMesh(geometries[def.geometry], material, count);
+        mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        mesh.frustumCulled = false;
+        const items = [];
+
+        for (let i = 0; i < count; i++) {
+            const item = createParticleItem(false);
+            item.baseScale = 0.4 + Math.random() * 0.4;
+            item.currentScale = item.baseScale;
+            item.currentPos.copy(item.treePos);
+            items.push(item);
+
+            _dummy.position.copy(item.currentPos);
+            _dummy.quaternion.copy(item.quaternion);
+            _dummy.scale.setScalar(item.currentScale);
+            _dummy.updateMatrix();
+            mesh.setMatrixAt(i, _dummy.matrix);
+
+            const tint = 0.82 + Math.random() * 0.32;
+            _colorA.setRGB(tint, tint, tint);
+            mesh.setColorAt(i, _colorA);
+        }
+
+        mesh.instanceMatrix.needsUpdate = true;
+        if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+        mainGroup.add(mesh);
+        particleGroups.push({ key: def.key, mesh, items });
+    });
+
+    const dustCount = q.dust;
+    if (dustCount > 0) {
+        const dustMesh = new THREE.InstancedMesh(geometries.dust, matLib.dust, dustCount);
+        dustMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        dustMesh.frustumCulled = false;
+        const items = [];
+        for (let i = 0; i < dustCount; i++) {
+            const item = createParticleItem(true);
+            item.baseScale = 0.5 + Math.random();
+            item.currentScale = item.baseScale;
+            item.currentPos.copy(item.treePos);
+            items.push(item);
+            _dummy.position.copy(item.currentPos);
+            _dummy.quaternion.copy(item.quaternion);
+            _dummy.scale.setScalar(item.currentScale);
+            _dummy.updateMatrix();
+            dustMesh.setMatrixAt(i, _dummy.matrix);
+        }
+        dustMesh.instanceMatrix.needsUpdate = true;
+        mainGroup.add(dustMesh);
+        particleGroups.push({ key: 'DUST', mesh: dustMesh, items });
+    }
+}
+
+function disposeParticles() {
+    particleGroups.forEach((group) => {
+        mainGroup.remove(group.mesh);
+        group.mesh.dispose?.();
+    });
+    particleGroups = [];
+}
+
+function updateParticles(dt, time) {
+    if (!particleGroups.length) return;
+
+    const mode = STATE.mode;
+    const theme = THEMES[STATE.themeIndex];
+    const floatScale = REDUCED_MOTION ? 0.04 : (theme.id === 1 ? 0.3 : 0.15);
+    const scatterScale = STATE.scatterScale;
+    const posAlpha = 1 - Math.exp(-3.0 * dt);
+    const scaleAlpha = 1 - Math.exp(-5.0 * dt);
+
+    for (let g = 0; g < particleGroups.length; g++) {
+        const group = particleGroups[g];
+        const items = group.items;
+        const isDust = group.key === 'DUST';
+        const mesh = group.mesh;
+
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            let targetScale;
+
+            if (mode === 'TREE') {
+                _targetVec.copy(item.treePos);
+                _targetVec.y += Math.sin(time * item.speed + item.offset) * floatScale;
+                _targetVec.x += Math.cos(time * 0.5 * item.speed + item.offset) * 0.1;
+
+                if (isDust) {
+                    targetScale = item.baseScale * (0.5 + 0.5 * Math.sin(time * 3 + item.offset));
+                } else {
+                    targetScale = item.baseScale * (theme.id === 1 ? (1.0 + 0.2 * Math.sin(time * 3 + item.offset)) : 1.0);
+                }
+            } else if (mode === 'SCATTER' || mode === 'LETTER') {
+                _targetVec.copy(item.scatterPos);
+                if (mode === 'SCATTER') _targetVec.multiplyScalar(scatterScale);
+
+                if (isDust) {
+                    targetScale = item.baseScale * (0.5 + 0.5 * Math.sin(time * 3 + item.offset));
+                } else {
+                    targetScale = item.baseScale;
+                }
+            } else {
+                // FOCUS：装饰全部散开并缩小，把视觉焦点留给照片/星星
+                _targetVec.copy(item.scatterPos);
+                targetScale = 0.01;
+            }
+
+            item.currentPos.lerp(_targetVec, posAlpha);
+            item.currentScale += (targetScale - item.currentScale) * scaleAlpha;
+
+            _dummy.position.copy(item.currentPos);
+            _dummy.quaternion.copy(item.quaternion);
+            _dummy.scale.setScalar(item.currentScale);
+            _dummy.updateMatrix();
+            mesh.setMatrixAt(i, _dummy.matrix);
+        }
+        mesh.instanceMatrix.needsUpdate = true;
+    }
+}
+
+function setActiveEmissiveMats() {
+    const theme = THEMES[STATE.themeIndex];
+    const mats = new Set();
+    Object.values(theme.mats).forEach((key) => {
+        const mat = matLib[key];
+        if (mat && mat.emissive) mats.add(mat);
+    });
+    if (matLib[theme.star] && matLib[theme.star].emissive) mats.add(matLib[theme.star]);
+    activeEmissiveMats = Array.from(mats);
+}
+
+function updateEmissive(time) {
+    for (let i = 0; i < activeEmissiveMats.length; i++) {
+        const mat = activeEmissiveMats[i];
+        const base = mat.userData.baseEmissive;
+        if (!Number.isFinite(base)) continue;
+        mat.emissiveIntensity = base * (0.8 + 0.26 * Math.sin(time * 2.0 + i * 1.7));
+    }
+}
+
+/* ============================================================
+ * 照片
+ * ============================================================ */
+
+function generatePhotoPosition(index) {
+    const h = CONFIG.particles.treeHeight;
+    const t = 0.22 + ((index * 0.167) % 0.62);
+    const y = t * h - h / 2;
+    const radius = Math.max(2.0, CONFIG.particles.treeRadius * (1 - t)) + 2.8;
+    const angle = index * 2.399963 + 0.35;
+    return new THREE.Vector3(Math.cos(angle) * radius, y, Math.sin(angle) * radius);
+}
+
+function createPhotoItem(texture, src, name = '') {
+    if (!texture || !texture.image) return null;
+    if (photoItems.length >= CONFIG.photo.maxCount) {
+        showToast(`最多添加 ${CONFIG.photo.maxCount} 张照片`, { type: 'error' });
+        return null;
+    }
+
+    const aspect = (texture.image.width || 1) / (texture.image.height || 1);
+    const base = 2.4;
+    const photoW = aspect >= 1 ? base : base * aspect;
+    const photoH = aspect >= 1 ? base / aspect : base;
+
+    const group = new THREE.Group();
+    const frame = new THREE.Mesh(
+        new THREE.BoxGeometry(photoW + 0.15, photoH + 0.15, 0.1),
+        matLib.frameGold
+    );
+    group.add(frame);
+
+    const photoMaterial = new THREE.MeshBasicMaterial({
+        map: texture,
+        color: 0xd8d8d8
+    });
+    const photo = new THREE.Mesh(new THREE.PlaneGeometry(photoW, photoH), photoMaterial);
+    photo.position.z = 0.06;
+    group.add(photo);
+
+    const border = new THREE.Mesh(
+        new THREE.BoxGeometry(photoW + 0.25, photoH + 0.25, 0.08),
+        matLib.snowBorder
+    );
+    border.position.z = -0.02;
+    border.visible = STATE.themeIndex !== 0;
+    group.add(border);
+
+    const placement = generatePhotoPosition(photoItems.length);
+    const item = {
+        group,
+        texture,
+        material: photoMaterial,
+        src: src || texture.image.src || '',
+        name: name || '照片',
+        treePos: placement,
+        scatterPos: generateScatterPosition(false),
+        currentPos: new THREE.Vector3(),
+        currentScale: 1,
+        baseScale: 1,
+        offset: Math.random() * 100,
+        speed: 0.5 + Math.random()
+    };
+    item.currentPos.copy(item.treePos);
+    group.position.copy(item.currentPos);
+    group.userData.photoItem = item;
+
+    applyPhotoTheme(item);
+    photoMeshGroup.add(group);
+    photoItems.push(item);
+    updateMediaPanel();
+    scheduleSave();
+    return item;
+}
+
+function applyPhotoTheme(item) {
+    const theme = THEMES[STATE.themeIndex];
+    const frameMat = matLib[theme.frame] || matLib.frameGold;
+    if (item.group.children[0]) item.group.children[0].material = frameMat;
+    if (item.group.children[2]) item.group.children[2].visible = STATE.themeIndex !== 0;
+}
+
+function updatePhotos(dt, time, focusMatrix) {
+    if (!photoItems.length) return;
+
+    const mode = STATE.mode;
+    const floatScale = REDUCED_MOTION ? 0.03 : 0.1;
+    const posAlpha = 1 - Math.exp(-3.2 * dt);
+    const focusAlpha = 1 - Math.exp(-6.0 * dt);
+    const scaleAlpha = 1 - Math.exp(-6.0 * dt);
+    const scatterScale = STATE.scatterScale;
+
+    photoItems.forEach((item) => {
+        let targetScale;
+        let focused = false;
+
+        if (mode === 'TREE') {
+            _targetVec.copy(item.treePos);
+            _targetVec.y += Math.sin(time * item.speed + item.offset) * floatScale;
+            targetScale = item.baseScale;
+        } else if (mode === 'SCATTER' || mode === 'LETTER') {
+            _targetVec.copy(item.scatterPos);
+            if (mode === 'SCATTER') _targetVec.multiplyScalar(scatterScale);
+            targetScale = item.baseScale * 2.2;
+        } else if (mode === 'FOCUS') {
+            if (item.group === STATE.focusTarget && focusMatrix) {
+                _targetVec.set(0, 0, STATE.cameraZ - 15).applyMatrix4(focusMatrix);
+                targetScale = item.baseScale * 3.4;
+                focused = true;
+            } else {
+                _targetVec.copy(item.scatterPos);
+                targetScale = 0.01;
+            }
+        } else {
+            _targetVec.copy(item.treePos);
+            targetScale = item.baseScale;
+        }
+
+        item.currentPos.lerp(_targetVec, focused ? focusAlpha : posAlpha);
+        item.currentScale += (targetScale - item.currentScale) * scaleAlpha;
+        item.group.position.copy(item.currentPos);
+        item.group.scale.setScalar(item.currentScale);
+
+        // 始终面向相机，避免照片侧对观众只剩一条边
+        item.group.lookAt(camera.position);
+    });
+}
+
+function removePhotoItem(item) {
+    if (!item) return;
+    if (STATE.focusTarget === item.group) exitFocus();
+    photoMeshGroup.remove(item.group);
+    item.group.traverse((child) => {
+        if (!child.isMesh) return;
+        if (child.geometry) child.geometry.dispose();
+        if (child.material && child.material !== matLib.frameGold &&
+            child.material !== matLib.frameIce && child.material !== matLib.frameBarbie &&
+            child.material !== matLib.snowBorder && child.material !== matLib.iceFrame) {
+            if (child.material.map) child.material.map.dispose();
+            child.material.dispose();
+        }
+    });
+    const index = photoItems.indexOf(item);
+    if (index >= 0) photoItems.splice(index, 1);
+    if (STATE.currentPhotoIndex >= photoItems.length) STATE.currentPhotoIndex = photoItems.length - 1;
+    updateMediaPanel();
+    scheduleSave();
+}
+
+function clearPhotos({ silent = false } = {}) {
+    photoItems.slice().forEach((item) => removePhotoItem(item));
+    updateMediaPanel();
+    if (!silent) scheduleSave();
+}
+
+/* ============================================================
+ * 背景
+ * ============================================================ */
+
+function createBackgrounds() {
+    const q = CONFIG.quality[STATE.resolvedQuality];
+    createGalaxy(q.galaxy);
+    createSnow(q.snow);
+    createHeart(q.hearts);
+}
+
+function disposeBackgrounds() {
+    [galaxySystem, snowSystem, heartSystem].forEach((system) => {
+        if (!system) return;
+        bgGroup.remove(system);
+        if (system.geometry) system.geometry.dispose();
+        if (system.material) system.material.dispose();
+    });
+    galaxySystem = null;
+    snowSystem = null;
+    heartSystem = null;
+}
+
+function createGalaxy(count) {
+    const geometry = new THREE.BufferGeometry();
+    const position = new Float32Array(count * 3);
+    const color = new Float32Array(count * 3);
+    const c1 = new THREE.Color(0x88aaff);
+    const c2 = new THREE.Color(0xffffee);
+    const c3 = new THREE.Color(0xffd700);
+
+    for (let i = 0; i < count; i++) {
+        const radius = 60 + Math.random() * 250;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        position[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+        position[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+        position[i * 3 + 2] = radius * Math.cos(phi);
+
+        const c = Math.random();
+        const finalC = c < 0.6 ? c2 : (c < 0.9 ? c1 : c3);
+        color[i * 3] = finalC.r;
+        color[i * 3 + 1] = finalC.g;
+        color[i * 3 + 2] = finalC.b;
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(color, 3));
+
+    galaxySystem = new THREE.Points(geometry, new THREE.PointsMaterial({
+        size: 1.0, transparent: true, opacity: 0.8, vertexColors: true,
+        sizeAttenuation: true, blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    galaxySystem.visible = THEMES[STATE.themeIndex].background === 'galaxy';
+    bgGroup.add(galaxySystem);
+}
+
+function createParticleShaderMaterial(map, opacity, size, speed) {
+    return new THREE.ShaderMaterial({
+        uniforms: {
+            uTime: { value: 0 },
+            uSpeed: { value: speed },
+            uMap: { value: map },
+            uOpacity: { value: opacity },
+            uSize: { value: size }
+        },
+        vertexShader: `
+            attribute float velocity;
+            attribute vec3 color;
+            uniform float uTime;
+            uniform float uSpeed;
+            uniform float uSize;
+            varying vec3 vColor;
+            void main() {
+                vec3 p = position;
+                p.y = mod(p.y - uTime * uSpeed * velocity + 50.0, 100.0) - 50.0;
+                vec4 mv = modelViewMatrix * vec4(p, 1.0);
+                gl_PointSize = clamp(uSize * (300.0 / max(1.0, -mv.z)), 1.0, 42.0);
+                gl_Position = projectionMatrix * mv;
+                vColor = color;
+            }
+        `,
+        fragmentShader: `
+            uniform sampler2D uMap;
+            uniform float uOpacity;
+            varying vec3 vColor;
+            void main() {
+                float alpha = texture2D(uMap, gl_PointCoord).a;
+                if (alpha < 0.01) discard;
+                gl_FragColor = vec4(vColor, alpha * uOpacity);
+            }
+        `,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+    });
+}
+
+function createSnow(count) {
+    const geometry = new THREE.BufferGeometry();
+    const position = new Float32Array(count * 3);
+    const color = new Float32Array(count * 3);
+    const velocity = new Float32Array(count);
+
+    for (let i = 0; i < count; i++) {
+        position[i * 3] = (Math.random() - 0.5) * 100;
+        position[i * 3 + 1] = (Math.random() - 0.5) * 100;
+        position[i * 3 + 2] = (Math.random() - 0.5) * 60;
+        velocity[i] = 1.0 + Math.random();
+        color[i * 3] = 1;
+        color[i * 3 + 1] = 1;
+        color[i * 3 + 2] = 1;
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
+    geometry.setAttribute('velocity', new THREE.BufferAttribute(velocity, 1));
+    geometry.setAttribute('color', new THREE.BufferAttribute(color, 3));
+
+    snowSystem = new THREE.Points(geometry, createParticleShaderMaterial(snowTexture, 0.9, 1.15, CONFIG.particles.snowSpeed));
+    snowSystem.visible = THEMES[STATE.themeIndex].background === 'snow';
+    bgGroup.add(snowSystem);
+}
+
+function createHeart(count) {
+    const geometry = new THREE.BufferGeometry();
+    const position = new Float32Array(count * 3);
+    const color = new Float32Array(count * 3);
+    const velocity = new Float32Array(count);
+    const c1 = new THREE.Color(CONFIG.colors.barbieHot);
+    const c2 = new THREE.Color(CONFIG.colors.barbieSoft);
+    const c3 = new THREE.Color(0xffffff);
+
+    for (let i = 0; i < count; i++) {
+        position[i * 3] = (Math.random() - 0.5) * 120;
+        position[i * 3 + 1] = (Math.random() - 0.5) * 120;
+        position[i * 3 + 2] = (Math.random() - 0.5) * 80;
+        velocity[i] = 0.5 + Math.random() * 0.8;
+
+        const c = Math.random();
+        const finalC = c < 0.4 ? c1 : (c < 0.7 ? c2 : c3);
+        color[i * 3] = finalC.r;
+        color[i * 3 + 1] = finalC.g;
+        color[i * 3 + 2] = finalC.b;
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
+    geometry.setAttribute('velocity', new THREE.BufferAttribute(velocity, 1));
+    geometry.setAttribute('color', new THREE.BufferAttribute(color, 3));
+
+    heartSystem = new THREE.Points(geometry, createParticleShaderMaterial(heartTexture, 0.7, 1.7, CONFIG.particles.snowSpeed * 0.8));
+    heartSystem.visible = THEMES[STATE.themeIndex].background === 'heart';
+    bgGroup.add(heartSystem);
+}
+
+function updateBackgrounds(dt, time) {
+    if (galaxySystem && galaxySystem.visible) {
+        bgGroup.rotation.y -= 0.05 * dt;
+    }
+    if (snowSystem) snowSystem.material.uniforms.uTime.value = time;
+    if (heartSystem) heartSystem.material.uniforms.uTime.value = time;
+    if ((snowSystem && snowSystem.visible) || (heartSystem && heartSystem.visible)) {
+        bgGroup.rotation.y -= 0.015 * dt;
+    }
+}
+
+/* ============================================================
+ * 主题
+ * ============================================================ */
+
+function switchTheme(index, { instant = false, silent = false } = {}) {
+    const next = ((index % THEMES.length) + THEMES.length) % THEMES.length;
+    const theme = THEMES[next];
+    STATE.themeIndex = next;
+
+    document.body.classList.remove('theme-0', 'theme-1', 'theme-2');
+    document.body.classList.add(`theme-${next}`);
+
+    if (instant || !scene) {
+        scene.fog.color.setHex(theme.fog);
+        scene.background.setHex(theme.fog);
+        renderer.toneMappingExposure = theme.exposure;
+        STATE.themeTransition = null;
+    } else {
+        STATE.themeTransition = {
+            fromFog: scene.fog.color.clone(),
+            toFog: new THREE.Color(theme.fog),
+            fromExposure: renderer.toneMappingExposure,
+            toExposure: theme.exposure,
+            start: nowMs(),
+            duration: REDUCED_MOTION ? 1 : 800
+        };
+    }
+
+    if (galaxySystem) galaxySystem.visible = theme.background === 'galaxy';
+    if (snowSystem) snowSystem.visible = theme.background === 'snow';
+    if (heartSystem) heartSystem.visible = theme.background === 'heart';
+
+    if (matLib.snowBorder) matLib.snowBorder.color.setHex(theme.border);
+    if (matLib.dust) matLib.dust.color.setHex(theme.dust);
+
+    particleGroups.forEach((group) => {
+        if (group.key === 'DUST') return;
+        const mat = matLib[theme.mats[group.key]] || matLib.gold;
+        group.mesh.material = mat;
+    });
+
+    photoItems.forEach(applyPhotoTheme);
+
+    if (STATE.starMesh && STATE.starHaloMesh) {
+        STATE.starMesh.material = matLib[theme.star] || matLib.starGold;
+        STATE.starHaloMesh.material.color.setHex(theme.halo);
+    }
+
+    setActiveEmissiveMats();
+
+    const themeSelect = $('theme-select');
+    if (themeSelect) themeSelect.value = String(next);
+
+    if (!silent) {
+        scheduleSave();
+        showToast(`主题：${theme.name}`, { type: 'success', duration: 1600 });
+    }
+}
+
+function updateThemeTransition() {
+    const transition = STATE.themeTransition;
+    if (!transition) return;
+    const t = clamp((nowMs() - transition.start) / transition.duration, 0, 1);
+    const e = t * t * (3 - 2 * t);
+    _colorA.copy(transition.fromFog).lerp(transition.toFog, e);
+    scene.fog.color.copy(_colorA);
+    scene.background.copy(_colorA);
+    renderer.toneMappingExposure = lerp(transition.fromExposure, transition.toExposure, e);
+    if (t >= 1) STATE.themeTransition = null;
+}
+
+function createStarTopper() {
+    const star = new THREE.Mesh(new THREE.OctahedronGeometry(1.5, 0), matLib.starGold);
+    star.position.set(0, CONFIG.particles.treeHeight / 2 + 1.2, 0);
+
+    const halo = new THREE.Mesh(
+        new THREE.PlaneGeometry(8, 8),
+        new THREE.MeshBasicMaterial({
+            map: glowTexture,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            transparent: true,
+            opacity: 0.5,
+            color: 0xffaa00
+        })
+    );
+    star.add(halo);
+    starGroup.add(star);
+    STATE.starMesh = star;
+    STATE.starHaloMesh = halo;
+}
+
+/* ============================================================
+ * 指针 / 触摸交互
+ * ============================================================ */
+
+const pointerState = {
+    pointers: new Map(),
+    lastX: 0,
+    lastY: 0,
+    pinchStartDistance: 0,
+    pinchStartZ: 55,
+    moved: false,
+    suppressClick: false
+};
+
+function setupPointerControls() {
+    const el = renderer.domElement;
+    el.addEventListener('pointerdown', onPointerDown);
+    el.addEventListener('pointermove', onPointerMove);
+    el.addEventListener('pointerup', onPointerUp);
+    el.addEventListener('pointercancel', onPointerUp);
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('click', onCanvasClick);
+    el.addEventListener('dblclick', onCanvasDoubleClick);
+}
+
+function onPointerDown(e) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    pointerState.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    try { renderer.domElement.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+
+    if (pointerState.pointers.size === 1) {
+        STATE.dragging = true;
+        pointerState.moved = false;
+        pointerState.lastX = e.clientX;
+        pointerState.lastY = e.clientY;
+        STATE.spinVel.x = 0;
+        STATE.spinVel.y = 0;
+        document.body.classList.add('is-dragging');
+    } else if (pointerState.pointers.size === 2) {
+        const pts = Array.from(pointerState.pointers.values());
+        pointerState.pinchStartDistance = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        pointerState.pinchStartZ = STATE.cameraZTarget;
+        pointerState.moved = true;
+    }
+}
+
+function onPointerMove(e) {
+    const point = pointerState.pointers.get(e.pointerId);
+    if (!point) return;
+
+    const dx = e.clientX - point.x;
+    const dy = e.clientY - point.y;
+    point.x = e.clientX;
+    point.y = e.clientY;
+
+    if (pointerState.pointers.size === 1 && STATE.dragging) {
+        if (Math.abs(dx) + Math.abs(dy) > 2) pointerState.moved = true;
+        STATE.rotation.y += dx * 0.005;
+        STATE.rotation.x = clamp(STATE.rotation.x + dy * 0.005, -1.2, 1.2);
+        STATE.spinVel.y = clamp(dx * 0.35, -8, 8);
+        STATE.spinVel.x = clamp(dy * 0.35, -8, 8);
+        STATE.manualUntil = nowMs() + 2500;
+    } else if (pointerState.pointers.size >= 2) {
+        const pts = Array.from(pointerState.pointers.values());
+        const distance = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        if (pointerState.pinchStartDistance > 10 && distance > 10) {
+            STATE.cameraZTarget = clamp(
+                pointerState.pinchStartZ * (pointerState.pinchStartDistance / distance),
+                CONFIG.camera.minZ,
+                CONFIG.camera.maxZ
+            );
+        }
+        pointerState.moved = true;
+    }
+}
+
+function onPointerUp(e) {
+    pointerState.pointers.delete(e.pointerId);
+    try { renderer.domElement.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+
+    if (pointerState.pointers.size < 2) pointerState.pinchStartDistance = 0;
+    if (pointerState.pointers.size === 0) {
+        STATE.dragging = false;
+        document.body.classList.remove('is-dragging');
+        if (pointerState.moved) {
+            STATE.manualUntil = nowMs() + 2500;
+            pointerState.suppressClick = true;
+            setTimeout(() => { pointerState.suppressClick = false; }, 350);
+        }
+    }
+}
+
+function onWheel(e) {
+    e.preventDefault();
+    STATE.cameraZTarget = clamp(
+        STATE.cameraZTarget + e.deltaY * 0.03,
+        CONFIG.camera.minZ,
+        CONFIG.camera.maxZ
+    );
+    STATE.manualUntil = nowMs() + 1500;
+}
+
+function onCanvasClick(e) {
+    if (pointerState.suppressClick) {
+        pointerState.suppressClick = false;
+        return;
+    }
+    if (STATE.uiHidden) return;
+
+    const rect = renderer.domElement.getBoundingClientRect();
+    _pointerNdc.set(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1
+    );
+    _raycaster.setFromCamera(_pointerNdc, camera);
+    const hits = _raycaster.intersectObjects(photoMeshGroup.children, true);
+    if (hits.length) {
+        let node = hits[0].object;
+        while (node && !node.userData.photoItem) node = node.parent;
+        if (node && node.userData.photoItem) {
+            focusPhoto(node.userData.photoItem);
+            return;
+        }
+    }
+    if (STATE.mode === 'FOCUS') exitFocus();
+}
+
+function onCanvasDoubleClick() {
+    STATE.cameraZTarget = CONFIG.camera.z;
+    STATE.rotation.x = 0.15;
+    STATE.rotation.y = 0;
+    STATE.spinVel.x = 0;
+    STATE.spinVel.y = 0;
+    STATE.manualUntil = 0;
+    exitFocus();
+    showToast('视角已重置', { duration: 1400 });
+}
+
+/* ============================================================
+ * 聚焦
+ * ============================================================ */
+
+function focusPhoto(item) {
+    const index = photoItems.indexOf(item);
+    if (index < 0) return;
+    STATE.focusTarget = item.group;
+    STATE.currentPhotoIndex = index;
+    STATE.mode = 'FOCUS';
+    STATE.focusSource = 'pointer';
+    STATE.hasPalmCenter = false;
+}
+
+function focusNext(source = 'gesture') {
+    if (STATE.mode === 'FOCUS') return;
+    if (photoItems.length) {
+        STATE.currentPhotoIndex = (STATE.currentPhotoIndex + 1) % photoItems.length;
+        STATE.focusTarget = photoItems[STATE.currentPhotoIndex].group;
+    } else {
+        STATE.focusTarget = STATE.starMesh;
+    }
+    STATE.mode = 'FOCUS';
+    STATE.focusSource = source;
+    STATE.hasPalmCenter = false;
+}
+
+function exitFocus() {
+    if (STATE.mode !== 'FOCUS') return;
+    STATE.mode = 'TREE';
+    STATE.focusTarget = null;
+    STATE.focusSource = null;
+}
+
+/* ============================================================
+ * 摄像头 / 手势
+ * ============================================================ */
+
+let cameraStarting = false;
+
+function setHandActive(active) {
+    if (STATE.handActive === active) return;
+    STATE.handActive = active;
+    const chip = $('gesture-status');
+    if (!chip) return;
+    chip.classList.toggle('detected', active);
+    const text = $('gesture-status-text');
+    if (text) text.textContent = active ? '已检测到手' : '手势已开启';
+}
+
+function updateCameraUI(mode) {
+    const chip = $('gesture-status');
+    const toggle = $('btn-camera-toggle');
+    const hint = $('camera-hint');
+    const on = mode === 'on';
+
+    if (chip) {
+        chip.hidden = !on;
+        chip.classList.toggle('detected', STATE.handActive && on);
+        const text = $('gesture-status-text');
+        if (text && !STATE.handActive) text.textContent = '手势已开启';
+    }
+    if (toggle) {
+        toggle.textContent = on ? '关闭' : '开启';
+        toggle.classList.toggle('danger', on);
+    }
+    if (hint) {
+        if (on) hint.textContent = '已开启。画面只在本机处理，不会上传。';
+        else if (mode === 'starting') hint.textContent = '正在启动摄像头…';
+        else hint.textContent = '关闭状态。摄像头画面只在本地处理，不会上传。';
+    }
+}
+
+function loadHandModel() {
+    if (!handModelPromise) {
+        const promise = (async () => {
+            const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm');
+            const baseOptions = {
+                modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+                delegate: 'GPU'
+            };
+            try {
+                return await HandLandmarker.createFromOptions(vision, {
+                    baseOptions,
+                    runningMode: 'VIDEO',
+                    numHands: 1
+                });
+            } catch (err) {
+                console.warn('GPU 手势模型初始化失败，回退到 CPU：', err);
+                baseOptions.delegate = 'CPU';
+                return await HandLandmarker.createFromOptions(vision, {
+                    baseOptions,
+                    runningMode: 'VIDEO',
+                    numHands: 1
+                });
+            }
+        })();
+        handModelPromise = promise.catch((err) => {
+            handModelPromise = null;
+            throw err;
+        });
+    }
+    return handModelPromise;
+}
+
+async function startCamera() {
+    if (STATE.cameraOn || cameraStarting) return;
+    if (!navigator.mediaDevices?.getUserMedia) {
+        showToast('当前环境不支持摄像头', { type: 'error' });
+        return;
+    }
+
+    cameraStarting = true;
+    updateCameraUI('starting');
+    showToast('正在启动摄像头…', { duration: 2200 });
+    try {
+        // 先申请摄像头，让权限提示立即出现；模型下载放到后面
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+        });
+        STATE.stream = stream;
+        video = $('webcam');
+        video.srcObject = stream;
+        await video.play().catch(() => {});
+
+        showToast('摄像头已就绪，正在加载手势模型…', { duration: 2400 });
+        handLandmarker = await loadHandModel();
+
+        STATE.cameraOn = true;
+        lastVideoTime = -1;
+        updateCameraUI('on');
+        showToast('手势已开启，试试 OK 手势', { type: 'success' });
+        predictWebcam();
+    } catch (err) {
+        console.error('启动摄像头失败：', err);
+        if (STATE.stream) {
+            STATE.stream.getTracks().forEach((track) => track.stop());
+            STATE.stream = null;
+        }
+        if (video) video.srcObject = null;
+        updateCameraUI('off');
+        const message = err && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')
+            ? '摄像头权限被拒绝，请在浏览器设置中允许后重试'
+            : '摄像头启动失败，请稍后重试';
+        showToast(message, { type: 'error', duration: 4200 });
+    } finally {
+        cameraStarting = false;
+    }
+}
+
+function stopCamera({ silent = false } = {}) {
+    STATE.cameraOn = false;
+    if (STATE.stream) {
+        STATE.stream.getTracks().forEach((track) => track.stop());
+        STATE.stream = null;
+    }
+    if (video) {
+        video.pause();
+        video.srcObject = null;
+    }
+    STATE.hand.detected = false;
+    STATE.handActive = false;
+    lastVideoTime = -1;
+    if (STATE.mode === 'FOCUS' && STATE.focusSource === 'gesture') exitFocus();
+    if (STATE.mode === 'SCATTER') {
+        STATE.mode = 'TREE';
+        STATE.hasPalmCenter = false;
+        STATE.scatterScale = 1;
+    }
+    updateCameraUI('off');
+    const chip = $('gesture-status');
+    if (chip) chip.classList.remove('detected');
+    if (!silent) showToast('摄像头已关闭', { duration: 1800 });
+}
+
+function predictWebcam() {
+    if (!STATE.cameraOn || !video || !handLandmarker) return;
+
+    if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
+        lastVideoTime = video.currentTime;
+        try {
+            const result = handLandmarker.detectForVideo(video, nowMs());
+            const landmarks = result?.landmarks?.[0];
+            if (landmarks) processGestures(landmarks);
+            else onHandLost();
+        } catch (err) {
+            console.warn('手势检测失败：', err);
+        }
+    }
+    requestAnimationFrame(predictWebcam);
+}
+
+function onHandLost() {
+    STATE.hand.detected = false;
+    STATE.okSince = 0;
+    STATE.themeGestureSince = 0;
+    STATE.themeGestureLocked = false;
+    STATE.gestureCandidate = 'TREE';
+    setHandActive(false);
+}
+
+function processGestures(lm) {
+    if (!lm || lm.length < 21) return;
+    STATE.hand.detected = true;
+    STATE.lastHandSeen = nowMs();
+    setHandActive(true);
+
+    if (STATE.mode === 'LETTER') return;
+
+    const time = nowMs();
+    const dist = (i, j) => Math.hypot(lm[i].x - lm[j].x, lm[i].y - lm[j].y);
+    const palm = Math.max(dist(0, 9), 0.01);
+    const dIndex = dist(8, 0);
+    const dMiddle = dist(12, 0);
+    const dRing = dist(16, 0);
+    const dPinky = dist(20, 0);
+
+    // OK 手势：拇指与食指捏合、中指伸展
+    if (dist(4, 8) < palm * 0.42 && dMiddle > palm * 1.15 && dMiddle > dIndex * 1.15) {
+        if (STATE.okSince === 0) STATE.okSince = time;
+        if (STATE.letterContent.trim() &&
+            time - STATE.okSince > 140 &&
+            time - STATE.letterLastTriggerTime > CONFIG.gestures.letterCooldown) {
+            STATE.letterLastTriggerTime = time;
+            STATE.okSince = 0;
+            enterLetterMode();
+        }
+        return;
+    }
+    STATE.okSince = 0;
+
+    // 手势换主题：竖起大拇指，或比 V（食指 + 中指伸出）
+    // 不再使用“四指张开 + 拇指收起”，因为它与张开手掌散开冲突，实测很难触发。
+    const curled = (tip, mcp) => dist(tip, mcp) < palm * 0.9;
+    const allCurled = curled(8, 9) && curled(12, 9) && curled(16, 9) && curled(20, 9);
+    const thumbOut = (dist(4, 9) > palm * 0.9 || dist(4, 0) > palm * 1.1) &&
+        dist(4, 17) > palm * 0.8;
+    const thumbFarthest = dist(4, 0) >= Math.max(dIndex, dMiddle, dRing, dPinky) * 1.02;
+    const thumbUpGesture = thumbOut && allCurled && thumbFarthest;
+    const vSign = dIndex > palm * 1.3 && dMiddle > palm * 1.25 &&
+        dist(16, 9) < palm * 0.9 && dist(20, 9) < palm * 0.9;
+    const themeGesture = thumbUpGesture || vSign;
+
+    if (themeGesture) {
+        if (!STATE.themeGestureLocked) {
+            if (STATE.themeGestureSince === 0) STATE.themeGestureSince = time;
+            if (time - STATE.themeGestureSince > 160) {
+                if (!STATE.isGestureSwitchEnabled) {
+                    showToast('手势换主题已关闭，可在设置中开启', { duration: 2200 });
+                    STATE.themeGestureLocked = true;
+                } else if (time - STATE.gestureDebounceTimer > CONFIG.gestures.themeCooldown) {
+                    switchTheme((STATE.themeIndex + 1) % THEMES.length);
+                    STATE.gestureDebounceTimer = time;
+                    STATE.themeGestureSince = 0;
+                    STATE.themeGestureLocked = true;
+                } else {
+                    // 冷却中：本次手势不再重复触发，等松手后再试
+                    STATE.themeGestureLocked = true;
+                }
+            }
+        }
+    } else {
+        STATE.themeGestureSince = 0;
+        STATE.themeGestureLocked = false;
+    }
+
+    const avgSpread = (dIndex + dMiddle + dRing + dPinky) / 4;
+    const isPointing = dIndex > Math.max(0.1, palm * 1.2) &&
+        dMiddle < palm * 0.95 && dRing < palm * 0.9 && dPinky < palm * 1.0;
+    const isPalmOpen = avgSpread > Math.max(CONFIG.gestures.palmOpenThreshold, palm * 1.6) &&
+        dMiddle > palm * 1.1;
+
+    const desired = isPointing ? 'FOCUS' : (isPalmOpen ? 'SCATTER' : 'TREE');
+    if (desired !== STATE.gestureCandidate) {
+        STATE.gestureCandidate = desired;
+        STATE.gestureSince = time;
+    }
+    const stable = time - STATE.gestureSince >= CONFIG.gestures.stableMs;
+
+    if (desired === 'FOCUS') {
+        if (stable && STATE.mode !== 'FOCUS') focusNext('gesture');
+    } else if (desired === 'SCATTER') {
+        if (stable) {
+            if (STATE.mode !== 'SCATTER' || !STATE.hasPalmCenter) {
+                STATE.palmCenter = { x: lm[9].x, y: lm[9].y };
+                STATE.hasPalmCenter = true;
+                STATE.gestureBaseSpread = avgSpread;
+                STATE.scatterScale = 1.0;
+            }
+            if (STATE.mode === 'FOCUS' && STATE.focusSource === 'pointer') {
+                STATE.mode = 'SCATTER';
+                STATE.focusTarget = null;
+                STATE.focusSource = null;
+            }
+            STATE.mode = 'SCATTER';
+
+            if (STATE.gestureBaseSpread) {
+                STATE.scatterScale += (clamp(Math.pow(STATE.gestureBaseSpread / avgSpread, 2), 0.1, 5.0) - STATE.scatterScale) * 0.15;
+            }
+            const gain = CONFIG.gestures.sensitivity;
+            const dx = lm[9].x - STATE.palmCenter.x;
+            const dy = lm[9].y - STATE.palmCenter.y;
+            STATE.spinVel.x += (clamp(-dy * gain, -3, 3) - STATE.spinVel.x) * 0.2;
+            STATE.spinVel.y += (clamp(dx * gain, -3, 3) - STATE.spinVel.y) * 0.2;
+        }
+    } else {
+        if (stable && STATE.mode !== 'TREE') {
+            if (STATE.mode === 'FOCUS') exitFocus();
+            STATE.mode = 'TREE';
+            STATE.hasPalmCenter = false;
+            STATE.scatterScale = 1.0;
+            STATE.spinVel.x *= 0.9;
+            STATE.spinVel.y *= 0.9;
+        }
+    }
+
+    if (STATE.mode !== 'FOCUS') {
+        STATE.hand.x += ((lm[9].x - 0.5) * 3.0 - STATE.hand.x) * 0.1;
+        STATE.hand.y += ((lm[9].y - 0.5) * 3.0 - STATE.hand.y) * 0.1;
+    }
+}
+
+/* ============================================================
+ * 主循环
+ * ============================================================ */
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    const dt = Math.min(clock.getDelta(), 0.05);
+    const time = clock.elapsedTime;
+    const now = nowMs();
+    STATE.time = time;
+
+    STATE.cameraZ += (STATE.cameraZTarget - STATE.cameraZ) * (1 - Math.exp(-6 * dt));
+    camera.position.z = STATE.cameraZ;
+
+    const inputX = STATE.hand.detected ? STATE.hand.x : 0;
+    const theme = THEMES[STATE.themeIndex];
+    const motionScale = REDUCED_MOTION ? 0.35 : 1;
+
+    if (STATE.mode === 'LETTER') {
+        STATE.rotation.x = lerp(STATE.rotation.x, Math.PI / 4, dt * 1.5);
+        STATE.rotation.y -= 0.1 * dt * motionScale;
+    } else if (STATE.mode === 'TREE') {
+        if (!STATE.dragging) {
+            if (now < STATE.manualUntil) {
+                STATE.rotation.y += STATE.spinVel.y * dt;
+                STATE.rotation.x = clamp(STATE.rotation.x + STATE.spinVel.x * dt, -1.2, 1.2);
+                const damping = Math.exp(-2.5 * dt);
+                STATE.spinVel.x *= damping;
+                STATE.spinVel.y *= damping;
+            } else {
+                STATE.rotation.y -= theme.autoSpin * motionScale * dt;
+                STATE.rotation.x = lerp(STATE.rotation.x, 0.15, dt * 2.0);
+                STATE.spinVel.x *= Math.exp(-4 * dt);
+                STATE.spinVel.y *= Math.exp(-4 * dt);
+            }
+        }
+    } else if (STATE.mode === 'SCATTER') {
+        if (!STATE.dragging) {
+            STATE.rotation.y += STATE.spinVel.y * dt;
+            STATE.rotation.x = clamp(STATE.rotation.x + STATE.spinVel.x * dt, -1.2, 1.2);
+            if (!STATE.hand.detected) {
+                const damping = Math.exp(-1.2 * dt);
+                STATE.spinVel.x *= damping;
+                STATE.spinVel.y *= damping;
+            }
+        }
+    } else if (STATE.mode === 'FOCUS') {
+        if (!STATE.dragging && now < STATE.manualUntil) {
+            STATE.rotation.y += STATE.spinVel.y * dt;
+            STATE.rotation.x = clamp(STATE.rotation.x + STATE.spinVel.x * dt, -1.2, 1.2);
+            const damping = Math.exp(-2.5 * dt);
+            STATE.spinVel.x *= damping;
+            STATE.spinVel.y *= damping;
+        }
+    }
+
+    if (STATE.mode === 'FOCUS' && STATE.focusSource === 'gesture' &&
+        !STATE.hand.detected && now - STATE.lastHandSeen > CONFIG.gestures.focusReleaseDelay) {
+        exitFocus();
+    }
+    if (STATE.mode === 'SCATTER' && STATE.cameraOn && !STATE.hand.detected &&
+        now - STATE.lastHandSeen > 1800) {
+        STATE.mode = 'TREE';
+        STATE.hasPalmCenter = false;
+        STATE.scatterScale = 1.0;
+    }
+
+    mainGroup.rotation.y = STATE.rotation.y;
+    mainGroup.rotation.x = STATE.rotation.x;
+    const targetZ = STATE.mode === 'TREE' ? inputX * 0.1 : 0;
+    mainGroup.rotation.z = lerp(mainGroup.rotation.z, targetZ, 1 - Math.exp(-2 * dt));
+
+    let focusMatrix = null;
+    if (STATE.mode === 'FOCUS') {
+        mainGroup.updateMatrixWorld(true);
+        _invMatrix.copy(mainGroup.matrixWorld).invert();
+        focusMatrix = _invMatrix;
+    }
+
+    updateThemeTransition();
+    updateParticles(dt, time);
+    updatePhotos(dt, time, focusMatrix);
+    updateBackgrounds(dt, time);
+    updateEmissive(time);
+
+    if (STATE.starMesh) {
+        STATE.starMesh.rotation.y -= dt * motionScale;
+        STATE.starMesh.rotation.z = Math.sin(time * 0.8) * 0.2;
+        STATE.starMesh.scale.setScalar(1.0 + Math.sin(time * 2) * 0.1 * motionScale);
+    }
+
+    if (bloomPass && bloomPass.enabled) composer.render();
+    else renderer.render(scene, camera);
+}
+
+/* ============================================================
+ * UI：面板、提示、设置
+ * ============================================================ */
+
+function showToast(message, { type = 'info', duration = 3200, actions = null } = {}) {
+    const container = $('toast-container');
+    if (!container) return () => {};
+    const isSticky = duration === 0;
+    if (isSticky) {
+        STATE.stickyToastCount = (STATE.stickyToastCount || 0) + 1;
+        document.body.classList.add('has-sticky-toast');
+    }
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    const text = document.createElement('span');
+    text.textContent = message;
+    toast.appendChild(text);
+
+    if (actions && actions.length) {
+        const actionsWrap = document.createElement('div');
+        actionsWrap.className = 'toast-actions';
+        actions.forEach((action) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'mini-btn';
+            btn.textContent = action.label;
+            btn.addEventListener('click', () => {
+                dismiss();
+                action.onClick?.();
+            });
+            actionsWrap.appendChild(btn);
+        });
+        toast.appendChild(actionsWrap);
+    }
+
+    container.appendChild(toast);
+    while (container.children.length > 4) container.removeChild(container.firstElementChild);
+
+    let removed = false;
+    const dismiss = () => {
+        if (removed) return;
+        removed = true;
+        if (isSticky) {
+            STATE.stickyToastCount = Math.max(0, (STATE.stickyToastCount || 1) - 1);
+            if (!STATE.stickyToastCount) document.body.classList.remove('has-sticky-toast');
+        }
+        toast.classList.add('hide');
+        setTimeout(() => toast.remove(), 260);
+    };
+
+    if (duration > 0) setTimeout(dismiss, duration);
+    return dismiss;
+}
+
+function openModal(id) {
+    const el = $(id);
+    if (!el) return;
+    el.hidden = false;
+    const focusable = el.querySelector('button, input, textarea, select');
+    if (focusable) setTimeout(() => focusable.focus(), 30);
+}
+
+function closeModal(id) {
+    const el = $(id);
+    if (el) el.hidden = true;
+}
+
+function setPanelCollapsed(collapsed) {
+    document.body.classList.toggle('panel-collapsed', collapsed);
+    const menu = $('btn-menu');
+    if (menu) {
+        menu.textContent = collapsed ? '菜单' : '关闭';
+        menu.setAttribute('aria-expanded', String(!collapsed));
+        menu.setAttribute('aria-label', collapsed ? '打开菜单' : '关闭菜单');
+    }
+}
+
+function toggleMenu() {
+    if (document.body.classList.contains('display-mode')) return;
+    setPanelCollapsed(!document.body.classList.contains('panel-collapsed'));
+}
+
+function openDrawer(id) {
+    closeDrawers();
+    const el = $(id);
+    if (!el) return;
+    activeDrawer = id;
+    el.classList.add('open');
+    el.removeAttribute('inert');
+    el.setAttribute('aria-hidden', 'false');
+    $('backdrop').classList.add('show');
+    setPanelCollapsed(true);
+    if (id === 'media-panel') updateMediaPanel();
+    if (id === 'settings-panel') updateSettingsUI();
+    const closeBtn = el.querySelector('.drawer-close');
+    if (closeBtn) setTimeout(() => closeBtn.focus(), 60);
+}
+
+function closeDrawers() {
+    $$('.drawer.open').forEach((panel) => {
+        panel.classList.remove('open');
+        panel.setAttribute('inert', '');
+        panel.setAttribute('aria-hidden', 'true');
+    });
+    activeDrawer = null;
+    $('backdrop').classList.remove('show');
+}
+
+function setUIHidden(hidden) {
+    STATE.uiHidden = hidden;
+    document.body.classList.toggle('ui-hidden', hidden);
+    const title = $('main-title');
+    if (title) {
+        title.classList.add('is-settled');
+        title.classList.toggle('is-hidden', hidden);
+    }
+    if (hidden) {
+        closeDrawers();
+        showToast('点击任意处恢复界面', { duration: 2200 });
+    }
+}
+
+function setDisplayMode(on, { silent = false } = {}) {
+    STATE.displayMode = on;
+    document.body.classList.toggle('display-mode', on);
+    const exitBtn = $('exit-display');
+    if (exitBtn) exitBtn.hidden = !on;
+
+    if (on) {
+        setUIHidden(false);
+        closeDrawers();
+        setPanelCollapsed(true);
+        if (STATE.musicData && audioEl && audioEl.paused) armFirstInteractionAudio();
+        if (!silent) showToast('已进入展示模式，按 Esc 退出', { duration: 2400 });
+    } else {
+        if (!silent) showToast('已退出展示模式', { duration: 1800 });
+        if (document.fullscreenElement) {
+            document.exitFullscreen?.().catch(() => {});
+        }
+    }
+}
+
+function armFirstInteractionAudio() {
+    if (window.__AUDIO_ARMED__) return;
+    window.__AUDIO_ARMED__ = true;
+    const handler = () => {
+        document.removeEventListener('pointerdown', handler, true);
+        document.removeEventListener('keydown', handler, true);
+        if (STATE.musicData && audioEl && audioEl.paused) playWithFade();
+    };
+    document.addEventListener('pointerdown', handler, true);
+    document.addEventListener('keydown', handler, true);
+}
+
+function showConfirm(message, { okText = '确定', cancelText = '取消' } = {}) {
+    return new Promise((resolve) => {
+        if (confirmResolver) {
+            confirmResolver(false);
+            confirmResolver = null;
+        }
+        const modal = $('confirm-modal');
+        const msg = $('confirm-message');
+        const ok = $('btn-confirm-ok');
+        const cancel = $('btn-confirm-cancel');
+        if (!modal || !ok || !cancel) {
+            resolve(window.confirm(message));
+            return;
+        }
+        msg.textContent = message;
+        ok.textContent = okText;
+        cancel.textContent = cancelText;
+
+        const cleanup = (value) => {
+            confirmResolver = null;
+            modal.hidden = true;
+            ok.onclick = null;
+            cancel.onclick = null;
+            modal.onclick = null;
+            resolve(value);
+        };
+        confirmResolver = cleanup;
+        ok.onclick = () => cleanup(true);
+        cancel.onclick = () => cleanup(false);
+        modal.onclick = (e) => { if (e.target === modal) cleanup(false); };
+        openModal('confirm-modal');
+    });
+}
+
+function renderThemeOptions() {
+    const select = $('theme-select');
+    if (!select) return;
+    select.innerHTML = '';
+    THEMES.forEach((theme) => {
+        const option = document.createElement('option');
+        option.value = String(theme.id);
+        option.textContent = theme.name;
+        select.appendChild(option);
+    });
+}
+
+function updateSettingsUI() {
+    const titleInput = $('title-input');
+    const titleEl = $('main-title');
+    if (titleInput && titleEl && document.activeElement !== titleInput) titleInput.value = titleEl.innerText;
+
+    const themeSelect = $('theme-select');
+    if (themeSelect) themeSelect.value = String(STATE.themeIndex);
+
+    const qualitySelect = $('quality-select');
+    if (qualitySelect) qualitySelect.value = STATE.quality;
+
+    updateCameraUI(STATE.cameraOn ? 'on' : 'off');
+
+    const gestureBtn = $('btn-gesture-switch');
+    const gestureHint = $('gesture-switch-hint');
+    if (gestureBtn) {
+        // 按钮显示“可执行的动作”，当前状态放到提示文字里，避免看起来像反的
+        gestureBtn.textContent = STATE.isGestureSwitchEnabled ? '关闭' : '开启';
+        gestureBtn.setAttribute('aria-label', STATE.isGestureSwitchEnabled ? '关闭手势换主题' : '开启手势换主题');
+        gestureBtn.classList.toggle('danger', STATE.isGestureSwitchEnabled);
+    }
+    if (gestureHint) {
+        gestureHint.textContent = STATE.isGestureSwitchEnabled
+            ? '当前开启：竖起大拇指或比 V 切换主题'
+            : '当前关闭：点击右侧按钮开启';
+    }
+}
+
+function updateMediaPanel() {
+    const grid = $('photo-grid');
+    const count = $('photo-count');
+    const empty = $('photo-empty');
+    const clearBtn = $('btn-clear-photos');
+    if (!grid) return;
+
+    grid.innerHTML = '';
+    photoItems.forEach((item, index) => {
+        const card = document.createElement('div');
+        card.className = 'photo-card';
+        card.tabIndex = 0;
+        card.setAttribute('role', 'button');
+        card.setAttribute('aria-label', `聚焦第 ${index + 1} 张照片`);
+
+        const img = document.createElement('img');
+        img.src = item.src;
+        img.alt = item.name || `照片 ${index + 1}`;
+        img.loading = 'lazy';
+        card.appendChild(img);
+
+        const indexTag = document.createElement('span');
+        indexTag.className = 'photo-index';
+        indexTag.textContent = `#${index + 1}`;
+        card.appendChild(indexTag);
+
+        const caption = document.createElement('span');
+        caption.className = 'photo-caption';
+        caption.textContent = item.name || `照片 ${index + 1}`;
+        card.appendChild(caption);
+
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'photo-delete';
+        del.setAttribute('aria-label', `删除第 ${index + 1} 张照片`);
+        del.textContent = '×';
+        del.addEventListener('click', (e) => {
+            e.stopPropagation();
+            removePhotoItem(item);
+            showToast('已删除照片', { duration: 1600 });
+        });
+        card.appendChild(del);
+
+        const focus = () => {
+            closeDrawers();
+            focusPhoto(item);
+        };
+        card.addEventListener('click', focus);
+        card.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                focus();
+            }
+        });
+        grid.appendChild(card);
+    });
+
+    if (count) count.textContent = `${photoItems.length}/${CONFIG.photo.maxCount}`;
+    if (empty) empty.hidden = photoItems.length > 0;
+    if (clearBtn) clearBtn.hidden = photoItems.length === 0;
+}
+
+function updateMusicUI() {
+    const name = $('music-name');
+    const play = $('btn-music-play');
+    const mute = $('btn-music-mute');
+    const volume = $('music-volume');
+    const upload = $('btn-bg-music');
+
+    if (name) name.textContent = STATE.musicData ? (STATE.musicName || '背景音乐') : '未添加音乐';
+    if (play) {
+        play.disabled = !STATE.musicData;
+        play.textContent = audioEl && !audioEl.paused ? '暂停' : '播放';
+    }
+    if (mute) {
+        mute.disabled = !STATE.musicData;
+        mute.textContent = STATE.muted ? '取消静音' : '静音';
+    }
+    if (volume) {
+        volume.value = String(Math.round(STATE.volume * 100));
+        volume.disabled = !STATE.musicData;
+    }
+    if (upload) upload.textContent = STATE.musicData ? '更换音乐' : '上传音乐';
+    if (audioEl) audioEl.volume = STATE.muted ? 0 : STATE.volume;
+}
+
+/* ============================================================
+ * 音乐
+ * ============================================================ */
+
+function setMusic(data, name = '', { autoplay = false, silent = false } = {}) {
+    STATE.musicData = data || null;
+    STATE.musicName = name || (data ? '背景音乐' : '');
+    STATE.fadeToken++;
+    if (!audioEl) return;
+
+    if (!data) {
+        audioEl.pause();
+        audioEl.removeAttribute('src');
+        audioEl.load();
+        updateMusicUI();
+        if (!silent) scheduleSave();
+        return;
+    }
+
+    audioEl.src = data;
+    audioEl.currentTime = 0;
+    audioEl.volume = STATE.muted ? 0 : STATE.volume;
+    updateMusicUI();
+    if (autoplay) playWithFade();
+    if (!silent) scheduleSave();
+}
+
+function playWithFade() {
+    if (!STATE.musicData || !audioEl) return;
+    const token = ++STATE.fadeToken;
+    audioEl.play().then(() => {
+        if (REDUCED_MOTION) {
+            audioEl.volume = STATE.muted ? 0 : STATE.volume;
+            return;
+        }
+        const target = STATE.muted ? 0 : STATE.volume;
+        audioEl.volume = 0;
+        const start = nowMs();
+        const step = () => {
+            if (token !== STATE.fadeToken) return;
+            const t = Math.min(1, (nowMs() - start) / 1000);
+            audioEl.volume = target * t;
+            if (t < 1) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+    }).catch(() => {
+        showToast('浏览器阻止了自动播放，请点击播放按钮', { type: 'error', duration: 3600 });
+    });
+}
+
+function toggleMusic() {
+    if (!STATE.musicData) {
+        showToast('请先上传音乐', { duration: 1800 });
+        return;
+    }
+    if (audioEl.paused) playWithFade();
+    else audioEl.pause();
+}
+
+function toggleMute() {
+    STATE.muted = !STATE.muted;
+    saveSettings();
+    updateMusicUI();
+    if (audioEl) audioEl.volume = STATE.muted ? 0 : STATE.volume;
+}
+
+function uploadMusicFile(file) {
+    if (!file) return;
+    if (!file.type.startsWith('audio/')) {
+        showToast('请选择音频文件', { type: 'error' });
+        return;
+    }
+    if (file.size > CONFIG.limits.musicBytes) {
+        showToast(`音乐不能超过 ${CONFIG.limits.musicBytes / 1024 / 1024} MB`, { type: 'error' });
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        setMusic(e.target.result, file.name, { autoplay: true });
+        updateMediaPanel();
+        showToast('音乐已添加', { type: 'success', duration: 1800 });
+    };
+    reader.onerror = () => showToast('音乐读取失败', { type: 'error' });
+    reader.readAsDataURL(file);
+}
+
+/* ============================================================
+ * 照片上传
+ * ============================================================ */
+
+function downscaleImage(img) {
+    const max = CONFIG.photo.maxSize;
+    const longest = Math.max(img.width || 1, img.height || 1);
+    if (longest <= max) return img.src;
+
+    const scale = max / longest;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL('image/jpeg', CONFIG.photo.quality);
+}
+
+function loadTexture(src) {
+    return new Promise((resolve, reject) => {
+        new THREE.TextureLoader().load(src, (texture) => {
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+            resolve(texture);
+        }, undefined, reject);
+    });
+}
+
+async function addPhotoFromSource(src, name = '照片') {
+    if (photoItems.length >= CONFIG.photo.maxCount) {
+        showToast(`最多添加 ${CONFIG.photo.maxCount} 张照片`, { type: 'error' });
+        return null;
+    }
+    try {
+        const texture = await loadTexture(src);
+        return createPhotoItem(texture, src, name);
+    } catch (err) {
+        console.warn('照片加载失败：', err);
+        showToast('照片加载失败，已跳过', { type: 'error' });
+        return null;
+    }
+}
+
+function uploadImageFile(file) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+        showToast('请选择图片文件', { type: 'error' });
+        return;
+    }
+    if (file.size > CONFIG.limits.imageBytes) {
+        showToast(`图片不能超过 ${CONFIG.limits.imageBytes / 1024 / 1024} MB`, { type: 'error' });
+        return;
+    }
+    if (photoItems.length >= CONFIG.photo.maxCount) {
+        showToast(`最多添加 ${CONFIG.photo.maxCount} 张照片`, { type: 'error' });
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = async () => {
+            const src = downscaleImage(img);
+            const item = await addPhotoFromSource(src, file.name);
+            if (item) showToast('照片已添加', { type: 'success', duration: 1600 });
+        };
+        img.onerror = () => showToast('图片解析失败', { type: 'error' });
+        img.src = e.target.result;
+    };
+    reader.onerror = () => showToast('图片读取失败', { type: 'error' });
+    reader.readAsDataURL(file);
+}
+
+/* ============================================================
+ * 书信
+ * ============================================================ */
+
+function updateLetterButtons() {
+    const btn = $('btn-view-letter');
+    if (!btn) return;
+    const hasLetter = STATE.letterContent.trim().length > 0;
+    btn.disabled = !hasLetter;
+    btn.classList.toggle('disabled', !hasLetter);
+}
+
+function enterLetterMode() {
+    if (STATE.mode === 'LETTER' || !STATE.letterContent.trim()) return;
+    STATE.mode = 'LETTER';
+    const token = ++STATE.letterToken;
+    const overlay = $('letter-overlay');
+    const paper = document.querySelector('.letter-paper');
+    const display = $('letter-content-display');
+    const hint = $('letter-hint');
+
+    clearTimeout(STATE.letterHideTimer);
+    overlay.style.display = 'flex';
+    overlay.style.pointerEvents = 'auto';
+    overlay.setAttribute('aria-hidden', 'false');
+    requestAnimationFrame(() => {
+        if (STATE.letterToken !== token) return;
+        overlay.style.opacity = 1;
+        paper.style.transform = 'translateY(0)';
+    });
+
+    display.textContent = '';
+    display.classList.remove('cursor');
+    display.scrollTop = 0;
+    if (hint) hint.hidden = false;
+
+    const chars = Array.from(STATE.letterContent);
+    let index = 0;
+
+    const typeWriter = () => {
+        if (STATE.letterToken !== token || STATE.mode !== 'LETTER') return;
+        if (index < chars.length) {
+            display.textContent += chars[index++];
+            display.scrollTop = display.scrollHeight;
+            STATE.letterTyper = setTimeout(typeWriter, REDUCED_MOTION ? 15 : 100);
+        } else {
+            display.classList.remove('cursor');
+            if (hint) hint.hidden = true;
+        }
+    };
+
+    if (REDUCED_MOTION) {
+        display.textContent = STATE.letterContent;
+        if (hint) hint.hidden = true;
+        return;
+    }
+
+    STATE.letterStartTimer = setTimeout(() => {
+        if (STATE.letterToken === token && STATE.mode === 'LETTER') {
+            display.classList.add('cursor');
+            typeWriter();
+        }
+    }, 1800);
+}
+
+function finishLetterTyping() {
+    if (STATE.mode !== 'LETTER') return;
+    STATE.letterToken++;
+    clearTimeout(STATE.letterTyper);
+    clearTimeout(STATE.letterStartTimer);
+    const display = $('letter-content-display');
+    if (display) {
+        display.textContent = STATE.letterContent;
+        display.classList.remove('cursor');
+        display.scrollTop = display.scrollHeight;
+    }
+    const hint = $('letter-hint');
+    if (hint) hint.hidden = true;
+}
+
+function exitLetterMode() {
+    if (STATE.mode !== 'LETTER') return;
+    STATE.mode = 'TREE';
+    STATE.letterToken++;
+    clearTimeout(STATE.letterTyper);
+    clearTimeout(STATE.letterStartTimer);
+    STATE.letterLastTriggerTime = nowMs();
+
+    const overlay = $('letter-overlay');
+    const paper = document.querySelector('.letter-paper');
+    overlay.style.opacity = 0;
+    overlay.style.pointerEvents = 'none';
+    overlay.setAttribute('aria-hidden', 'true');
+    paper.style.transform = 'translateY(18px)';
+    clearTimeout(STATE.letterHideTimer);
+    STATE.letterHideTimer = setTimeout(() => {
+        if (STATE.mode !== 'LETTER') overlay.style.display = 'none';
+    }, 600);
+
+    STATE.spinVel.x = 0;
+    STATE.spinVel.y = 0;
+    STATE.focusTarget = null;
+}
+
+/* ============================================================
+ * 事件绑定
+ * ============================================================ */
+
+function setupUI() {
+    renderThemeOptions();
+
+    const titleEl = $('main-title');
+    if (titleEl) {
+        titleEl.addEventListener('animationend', () => titleEl.classList.add('is-settled'), { once: true });
+        setTimeout(() => titleEl.classList.add('is-settled'), 3000);
+    }
+
+    $('btn-menu').addEventListener('click', toggleMenu);
+    $('btn-media').addEventListener('click', () => openDrawer('media-panel'));
+    $('btn-settings').addEventListener('click', () => openDrawer('settings-panel'));
+    $('backdrop').addEventListener('click', closeDrawers);
+
+    $$('.drawer-close').forEach((btn) => {
+        btn.addEventListener('click', () => closeDrawers());
+    });
+    $$('[data-close]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-close');
+            if (id === 'media-panel' || id === 'settings-panel') closeDrawers();
+            else closeModal(id);
+        });
+    });
+
+    $('btn-hide-ui').addEventListener('click', (e) => {
+        e.stopPropagation();
+        setUIHidden(true);
+    });
+    document.addEventListener('click', () => {
+        if (STATE.uiHidden) setUIHidden(false);
+    });
+
+    $('btn-display').addEventListener('click', () => {
+        setDisplayMode(true);
+        if (document.fullscreenEnabled && !document.fullscreenElement) {
+            document.documentElement.requestFullscreen?.().catch(() => {});
+        }
+    });
+    $('exit-display').addEventListener('click', () => setDisplayMode(false));
+
+    $('btn-switch-theme').addEventListener('click', () => {
+        switchTheme((STATE.themeIndex + 1) % THEMES.length);
+    });
+
+    $('btn-fullscreen').addEventListener('click', () => {
+        const action = document.fullscreenElement
+            ? document.exitFullscreen?.()
+            : document.documentElement.requestFullscreen?.();
+        if (action && action.catch) action.catch(() => showToast('当前浏览器不支持全屏', { type: 'error' }));
+    });
+    document.addEventListener('fullscreenchange', () => {
+        const isFs = !!document.fullscreenElement;
+        document.body.classList.toggle('is-fullscreen', isFs);
+        const btn = $('btn-fullscreen');
+        if (btn) btn.textContent = isFs ? '退出全屏' : '全屏';
+    });
+
+    // 设置面板
+    $('title-input').addEventListener('input', (e) => {
+        const value = e.target.value;
+        const title = $('main-title');
+        if (title) {
+            title.classList.add('is-settled');
+            title.textContent = value;
+        }
+        document.title = value || 'Luxury Tree';
+        scheduleSave();
+    });
+
+    $('theme-select').addEventListener('change', (e) => {
+        switchTheme(Number(e.target.value));
+    });
+
+    $('quality-select').addEventListener('change', (e) => {
+        const labels = { auto: '自动', high: '高', medium: '中', low: '低' };
+        applyQuality(e.target.value);
+        showToast(`画质：${labels[e.target.value] || e.target.value}`, { type: 'success', duration: 1600 });
+    });
+
+    $('btn-camera-toggle').addEventListener('click', () => {
+        if (STATE.cameraOn) stopCamera();
+        else openGestureHelp();
+    });
+
+    $('btn-gesture-switch').addEventListener('click', () => {
+        STATE.isGestureSwitchEnabled = !STATE.isGestureSwitchEnabled;
+        saveSettings();
+        updateSettingsUI();
+        showToast(STATE.isGestureSwitchEnabled ? '手势换主题已开启' : '手势换主题已关闭', { duration: 1800 });
+    });
+
+    $('btn-gesture-help').addEventListener('click', () => openGestureHelp());
+    $('btn-gesture-cancel').addEventListener('click', () => closeModal('gesture-modal'));
+    $('btn-gesture-start').addEventListener('click', () => {
+        closeModal('gesture-modal');
+        if (!STATE.cameraOn) startCamera();
+    });
+
+    $('btn-clear-save').addEventListener('click', async () => {
+        const ok = await showConfirm('清除自动存档后，下次打开将不再提示恢复。当前页面内容不会被删除。', { okText: '清除' });
+        if (!ok) return;
+        await deleteAutosave();
+        showToast('自动存档已清除', { type: 'success', duration: 2000 });
+    });
+
+    // 素材面板
+    $('btn-add-photo').addEventListener('click', () => $('file-input').click());
+    $('file-input').addEventListener('change', (e) => {
+        const files = Array.from(e.target.files || []);
+        e.target.value = '';
+        files.forEach(uploadImageFile);
+    });
+
+    $('btn-clear-photos').addEventListener('click', async () => {
+        if (!photoItems.length) return;
+        const ok = await showConfirm(`确定清空 ${photoItems.length} 张照片吗？此操作不可撤销。`, { okText: '清空' });
+        if (!ok) return;
+        clearPhotos();
+        showToast('已清空照片', { type: 'success', duration: 1800 });
+    });
+
+    $('btn-bg-music').addEventListener('click', () => $('music-input').click());
+    $('music-input').addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        e.target.value = '';
+        uploadMusicFile(file);
+    });
+
+    $('btn-music-play').addEventListener('click', toggleMusic);
+    $('btn-music-mute').addEventListener('click', toggleMute);
+    $('music-volume').addEventListener('input', (e) => {
+        STATE.volume = clamp(Number(e.target.value) / 100, 0, 1);
+        if (audioEl && !STATE.muted) audioEl.volume = STATE.volume;
+        saveSettings();
+    });
+
+    if (audioEl) {
+        audioEl.addEventListener('play', updateMusicUI);
+        audioEl.addEventListener('pause', updateMusicUI);
+    }
+
+    // 书信
+    $('btn-write-letter').addEventListener('click', () => {
+        const input = $('letter-text-input');
+        input.value = STATE.letterContent;
+        openModal('letter-editor-modal');
+        setTimeout(() => input.focus(), 120);
+    });
+    $('btn-cancel-letter').addEventListener('click', () => closeModal('letter-editor-modal'));
+    $('btn-save-letter').addEventListener('click', () => {
+        STATE.letterContent = $('letter-text-input').value.trim();
+        closeModal('letter-editor-modal');
+        updateLetterButtons();
+        scheduleSave();
+        showToast('书信已保存', { type: 'success', duration: 1600 });
+    });
+    $('btn-view-letter').addEventListener('click', () => {
+        if (!STATE.letterContent.trim()) {
+            showToast('还没有书信内容', { duration: 1800 });
+            return;
+        }
+        enterLetterMode();
+    });
+    $('btn-close-letter-mode').addEventListener('click', exitLetterMode);
+    $('btn-close-letter-mode').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            exitLetterMode();
+        }
+    });
+    $('letter-content-display').addEventListener('click', finishLetterTyping);
+
+    // 导入 / 导出
+    $('btn-import').addEventListener('click', () => $('import-input').click());
+    $('import-input').addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        e.target.value = '';
+        if (file) importFile(file);
+    });
+    $('btn-export').addEventListener('click', () => openModal('export-modal'));
+    $('btn-export-json').addEventListener('click', () => {
+        closeModal('export-modal');
+        exportJSON();
+    });
+    $('btn-export-html-display').addEventListener('click', () => {
+        closeModal('export-modal');
+        exportStandaloneHTML('display');
+    });
+    $('btn-export-html-edit').addEventListener('click', () => {
+        closeModal('export-modal');
+        exportStandaloneHTML('edit');
+    });
+
+    // 拖放
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const files = Array.from(e.dataTransfer?.files || []);
+        if (!files.length) return;
+        files.forEach((file) => {
+            if (file.type.startsWith('image/')) uploadImageFile(file);
+            else if (file.type.startsWith('audio/')) uploadMusicFile(file);
+            else if (/\.(json|html?)$/i.test(file.name)) importFile(file);
+            else showToast(`不支持的文件：${file.name}`, { type: 'error' });
+        });
+    });
+
+    // 键盘
+    document.addEventListener('keydown', (e) => {
+        const typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable);
+
+        if (e.key === 'Escape') {
+            const confirmModal = $('confirm-modal');
+            if (!confirmModal.hidden) {
+                confirmResolver?.(false);
+                return;
+            }
+            if (!$('export-modal').hidden) { closeModal('export-modal'); return; }
+            if (!$('gesture-modal').hidden) { closeModal('gesture-modal'); return; }
+            if (!$('letter-editor-modal').hidden) { closeModal('letter-editor-modal'); return; }
+            if (STATE.mode === 'LETTER') { exitLetterMode(); return; }
+            if (activeDrawer) { closeDrawers(); return; }
+            if (STATE.displayMode) { setDisplayMode(false); return; }
+            if (STATE.mode === 'FOCUS') { exitFocus(); return; }
+            if (STATE.uiHidden) { setUIHidden(false); return; }
+        }
+
+        if (!typing && (e.key === 'h' || e.key === 'H')) {
+            setUIHidden(!STATE.uiHidden);
+        }
+    });
+
+    // 窗口
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        const q = CONFIG.quality[STATE.resolvedQuality];
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, q.dpr));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        composer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    setPanelCollapsed(window.innerWidth < 680);
+    updateSettingsUI();
+    updateLetterButtons();
+}
+
+function openGestureHelp() {
+    const startBtn = $('btn-gesture-start');
+    if (startBtn) {
+        startBtn.disabled = STATE.cameraOn;
+        startBtn.textContent = STATE.cameraOn ? '摄像头已开启' : '启用摄像头';
+    }
+    openModal('gesture-modal');
+}
+
+/* ============================================================
+ * 自动保存（IndexedDB）
+ * ============================================================ */
+
+function openDB() {
+    return new Promise((resolve, reject) => {
+        if (!window.indexedDB) {
+            reject(new Error('IndexedDB 不可用'));
+            return;
+        }
+        const request = indexedDB.open(DB_NAME, 1);
+        request.onupgradeneeded = () => {
+            const db = request.result;
+            if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE);
+        };
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function dbPut(value) {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, 'readwrite');
+        tx.objectStore(DB_STORE).put(value, DB_KEY);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => { db.close(); reject(tx.error); };
+        tx.onabort = () => { db.close(); reject(tx.error); };
+    });
+}
+
+async function dbGet() {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, 'readonly');
+        const request = tx.objectStore(DB_STORE).get(DB_KEY);
+        request.onsuccess = () => { db.close(); resolve(request.result || null); };
+        request.onerror = () => { db.close(); reject(request.error); };
+    });
+}
+
+async function dbDelete() {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, 'readwrite');
+        tx.objectStore(DB_STORE).delete(DB_KEY);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => { db.close(); reject(tx.error); };
+    });
+}
+
+function serializeScene() {
+    const titleEl = $('main-title');
+    return {
+        version: 3,
+        title: titleEl ? titleEl.innerText.trim() : '',
+        letter: STATE.letterContent || '',
+        theme: STATE.themeIndex,
+        photos: photoItems.map((item) => ({ src: item.src, name: item.name })),
+        music: STATE.musicData || null,
+        musicName: STATE.musicName || '',
+        isGestureSwitchEnabled: STATE.isGestureSwitchEnabled,
+        updatedAt: Date.now()
+    };
+}
+
+function hasSceneContent(data) {
+    if (!data) return false;
+    return Boolean(
+        (typeof data.title === 'string' && data.title.trim()) ||
+        (typeof data.letter === 'string' && data.letter.trim()) ||
+        (Array.isArray(data.photos) && data.photos.length) ||
+        data.music
+    );
+}
+
+function scheduleSave() {
+    if (STATE.applying) return;
+    STATE.saveDirty = true;
+    clearTimeout(STATE.saveTimer);
+    STATE.saveTimer = setTimeout(() => {
+        saveAutosave();
+    }, 700);
+}
+
+async function saveAutosave() {
+    if (!STATE.saveDirty) return;
+    STATE.saveDirty = false;
+    try {
+        await dbPut(serializeScene());
+    } catch (err) {
+        console.warn('自动保存失败：', err);
+        if (!STATE.saveErrorShown) {
+            STATE.saveErrorShown = true;
+            showToast('自动保存失败，可能是存储空间不足', { type: 'error', duration: 4200 });
+        }
+    }
+}
+
+async function loadAutosave() {
+    try {
+        return await dbGet();
+    } catch (err) {
+        console.warn('读取自动存档失败：', err);
+        return null;
+    }
+}
+
+async function deleteAutosave() {
+    clearTimeout(STATE.saveTimer);
+    STATE.saveDirty = false;
+    try {
+        await dbDelete();
+    } catch (err) {
+        console.warn('清除自动存档失败：', err);
+    }
+}
+
+function showRestoreToast(data) {
+    showToast('检测到上次编辑的内容', {
+        duration: 0,
+        actions: [
+            {
+                label: '恢复',
+                onClick: async () => {
+                    try {
+                        await applySceneData(data, { silent: true });
+                        showToast('已恢复上次编辑', { type: 'success', duration: 2200 });
+                    } catch (err) {
+                        console.error(err);
+                        showToast('恢复失败，存档可能已损坏', { type: 'error' });
+                    }
+                }
+            },
+            { label: '忽略', onClick: () => {} }
+        ]
+    });
+}
+
+/* ============================================================
+ * 场景数据：应用 / 导入 / 导出
+ * ============================================================ */
+
+function setTitle(text) {
+    const title = $('main-title');
+    if (title) {
+        title.classList.add('is-settled');
+        title.classList.remove('is-hidden');
+        title.textContent = text;
+    }
+    const input = $('title-input');
+    if (input && document.activeElement !== input) input.value = text;
+    document.title = text || 'Luxury Tree';
+}
+
+function normalizePhotoList(photos) {
+    if (!Array.isArray(photos)) return [];
+    return photos.map((item) => {
+        if (typeof item === 'string') return { src: item, name: '照片' };
+        if (item && typeof item.src === 'string') {
+            return { src: item.src, name: typeof item.name === 'string' ? item.name : '照片' };
+        }
+        return null;
+    }).filter((item) => item && /^(data:image\/|https?:\/\/|blob:)/.test(item.src));
+}
+
+async function applySceneData(data, { silent = false, autoplay = false, respectStartMode = false } = {}) {
+    if (!data || typeof data !== 'object') throw new Error('无效的场景数据');
+    STATE.applying = true;
+    try {
+    if (typeof data.title === 'string') setTitle(data.title);
+
+    if (typeof data.letter === 'string') {
+        STATE.letterContent = data.letter;
+        updateLetterButtons();
+    }
+
+    if (typeof data.isGestureSwitchEnabled === 'boolean') {
+        STATE.isGestureSwitchEnabled = data.isGestureSwitchEnabled;
+        saveSettings();
+        updateSettingsUI();
+    }
+
+    if (typeof data.music === 'string' && data.music) {
+        setMusic(data.music, typeof data.musicName === 'string' ? data.musicName : '背景音乐', { autoplay, silent: true });
+    } else {
+        setMusic(null, '', { silent: true });
+    }
+
+    clearPhotos({ silent: true });
+    STATE.mode = 'TREE';
+    STATE.focusTarget = null;
+    STATE.focusSource = null;
+    STATE.currentPhotoIndex = -1;
+    STATE.spinVel.x = 0;
+    STATE.spinVel.y = 0;
+    STATE.scatterScale = 1;
+    STATE.hasPalmCenter = false;
+
+    const themeValue = Number(data.theme);
+    switchTheme(Number.isFinite(themeValue) ? themeValue : 0, { instant: true, silent: true });
+
+    const list = normalizePhotoList(data.photos);
+    if (list.length > CONFIG.photo.maxCount) {
+        showToast(`照片数量超过 ${CONFIG.photo.maxCount} 张，仅导入前 ${CONFIG.photo.maxCount} 张`, { type: 'error', duration: 3600 });
+    }
+    for (const photo of list.slice(0, CONFIG.photo.maxCount)) {
+        await addPhotoFromSource(photo.src, photo.name);
+    }
+
+    updateMediaPanel();
+    updateMusicUI();
+    updateSettingsUI();
+
+    if (respectStartMode && data.startMode === 'display') setDisplayMode(true, { silent: true });
+    } finally {
+        STATE.applying = false;
+    }
+
+    if (!silent) scheduleSave();
+}
+
+function readEmbeddedScene() {
+    const el = $('scene-data');
+    if (!el) return null;
+    const text = el.textContent.trim();
+    if (!text) return null;
+    try {
+        return JSON.parse(text);
+    } catch (err) {
+        console.warn('内嵌场景解析失败：', err);
+        return null;
+    }
+}
+
+async function loadInitialScene() {
+    const embedded = readEmbeddedScene();
+    if (embedded) {
+        try {
+            await applySceneData(embedded, { silent: true, respectStartMode: true });
+            if (embedded.startMode === 'display' && STATE.musicData) armFirstInteractionAudio();
+        } catch (err) {
+            console.error('加载内嵌场景失败：', err);
+            showToast('内嵌场景加载失败', { type: 'error' });
+        }
+        return;
+    }
+
+    const saved = await loadAutosave();
+    if (saved && hasSceneContent(saved)) showRestoreToast(saved);
+}
+
+function readFileText(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(file);
+    });
+}
+
+async function importFile(file) {
+    if (!file) return;
+    if (file.size > 80 * 1024 * 1024) {
+        showToast('文件过大，无法导入', { type: 'error' });
+        return;
+    }
+
+    try {
+        const text = await readFileText(file);
+        let data = null;
+
+        if (/\.html?$/i.test(file.name) || file.type === 'text/html') {
+            const doc = new DOMParser().parseFromString(text, 'text/html');
+            const sceneEl = doc.querySelector('#scene-data');
+            if (!sceneEl || !sceneEl.textContent.trim()) throw new Error('HTML 中没有找到场景数据');
+            data = JSON.parse(sceneEl.textContent);
+        } else {
+            data = JSON.parse(text);
+        }
+
+        await applySceneData(data, { autoplay: false });
+        closeDrawers();
+        showToast('导入成功', { type: 'success' });
+    } catch (err) {
+        console.error('导入失败：', err);
+        showToast('导入失败：文件格式不正确或已损坏', { type: 'error', duration: 4200 });
+    }
+}
+
+function dateStamp() {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+}
+
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+async function confirmLargeExport(size) {
+    if (size < 25 * 1024 * 1024) return true;
+    return showConfirm(`导出的文件约 ${(size / 1024 / 1024).toFixed(1)} MB，体积较大。仍要导出吗？`, { okText: '继续导出' });
+}
+
+async function exportJSON() {
+    try {
+        const data = serializeScene();
+        const json = JSON.stringify(data);
+        if (!(await confirmLargeExport(json.length))) return;
+        downloadBlob(new Blob([json], { type: 'application/json' }), `luxury-tree-${dateStamp()}.json`);
+        showToast('配置已导出', { type: 'success' });
+    } catch (err) {
+        console.error('导出 JSON 失败：', err);
+        showToast('导出失败：数据可能过大', { type: 'error' });
+    }
+}
+
+function buildStandaloneHTML(startMode) {
+    const data = serializeScene();
+    data.startMode = startMode;
+
+    const clone = document.documentElement.cloneNode(true);
+    const body = clone.querySelector('body');
+    if (body) body.className = '';
+
+    const titleEl = clone.querySelector('#main-title');
+    if (titleEl) {
+        titleEl.className = '';
+        titleEl.textContent = data.title || '';
+    }
+
+    const canvasContainer = clone.querySelector('#canvas-container');
+    if (canvasContainer) canvasContainer.innerHTML = '';
+
+    let loader = clone.querySelector('#loader');
+    if (!loader) {
+        loader = document.createElement('div');
+        loader.id = 'loader';
+        loader.innerHTML = '<div class="loader-inner"><div class="spinner"></div><div class="loader-text">正在点亮…</div></div>';
+        const bodyEl = clone.querySelector('body');
+        if (bodyEl) bodyEl.prepend(loader);
+    } else {
+        loader.style.opacity = '1';
+        loader.innerHTML = '<div class="loader-inner"><div class="spinner"></div><div class="loader-text">正在点亮…</div></div>';
+    }
+
+    const titleTag = clone.querySelector('title');
+    if (titleTag) titleTag.textContent = data.title || 'Luxury Tree';
+
+    const audio = clone.querySelector('#bg-music');
+    if (audio) {
+        audio.removeAttribute('src');
+        audio.pause?.();
+    }
+    const videoEl = clone.querySelector('#webcam');
+    if (videoEl) videoEl.removeAttribute('src');
+
+    if (body) {
+        body.classList.remove('is-fullscreen', 'ui-hidden', 'display-mode', 'panel-collapsed', 'theme-0', 'theme-1', 'theme-2');
+    }
+
+    const topControls = clone.querySelector('#top-right-controls');
+    if (topControls) topControls.classList.remove('is-hidden');
+
+    const gestureStatus = clone.querySelector('#gesture-status');
+    if (gestureStatus) gestureStatus.hidden = true;
+
+    const exitDisplay = clone.querySelector('#exit-display');
+    if (exitDisplay) exitDisplay.hidden = true;
+
+    ['media-panel', 'settings-panel'].forEach((id) => {
+        const panel = clone.querySelector(`#${id}`);
+        if (!panel) return;
+        panel.classList.remove('open');
+        panel.setAttribute('aria-hidden', 'true');
+        panel.setAttribute('inert', '');
+    });
+    const backdrop = clone.querySelector('#backdrop');
+    if (backdrop) backdrop.classList.remove('show');
+
+    ['letter-editor-modal', 'gesture-modal', 'export-modal', 'confirm-modal'].forEach((id) => {
+        const modal = clone.querySelector(`#${id}`);
+        if (modal) modal.hidden = true;
+    });
+
+    const letterOverlay = clone.querySelector('#letter-overlay');
+    if (letterOverlay) {
+        letterOverlay.style.display = 'none';
+        letterOverlay.style.opacity = '0';
+        letterOverlay.style.pointerEvents = 'none';
+        letterOverlay.setAttribute('aria-hidden', 'true');
+    }
+    const letterContent = clone.querySelector('#letter-content-display');
+    if (letterContent) letterContent.textContent = '';
+    const letterInput = clone.querySelector('#letter-text-input');
+    if (letterInput) letterInput.value = '';
+    const letterHint = clone.querySelector('#letter-hint');
+    if (letterHint) letterHint.hidden = false;
+
+    const toastContainer = clone.querySelector('#toast-container');
+    if (toastContainer) toastContainer.innerHTML = '';
+    const photoGrid = clone.querySelector('#photo-grid');
+    if (photoGrid) photoGrid.innerHTML = '';
+    const photoCount = clone.querySelector('#photo-count');
+    if (photoCount) photoCount.textContent = `0/${CONFIG.photo.maxCount}`;
+    const photoEmpty = clone.querySelector('#photo-empty');
+    if (photoEmpty) photoEmpty.hidden = false;
+    const clearPhotosBtn = clone.querySelector('#btn-clear-photos');
+    if (clearPhotosBtn) clearPhotosBtn.hidden = true;
+    const musicName = clone.querySelector('#music-name');
+    if (musicName) musicName.textContent = '未添加音乐';
+    const musicPlay = clone.querySelector('#btn-music-play');
+    if (musicPlay) { musicPlay.disabled = true; musicPlay.textContent = '播放'; }
+    const musicMute = clone.querySelector('#btn-music-mute');
+    if (musicMute) { musicMute.disabled = true; musicMute.textContent = '静音'; }
+    const volume = clone.querySelector('#music-volume');
+    if (volume) volume.disabled = true;
+
+    const titleInput = clone.querySelector('#title-input');
+    if (titleInput) titleInput.value = data.title || '';
+
+    let sceneData = clone.querySelector('#scene-data');
+    if (!sceneData) {
+        sceneData = document.createElement('script');
+        sceneData.type = 'application/json';
+        sceneData.id = 'scene-data';
+        const moduleScript = clone.querySelector('script[type="module"]');
+        if (moduleScript && moduleScript.parentNode) moduleScript.parentNode.insertBefore(sceneData, moduleScript);
+        else clone.querySelector('body')?.appendChild(sceneData);
+    }
+    sceneData.type = 'application/json';
+    sceneData.textContent = JSON.stringify(data).replace(/</g, '\\u003c');
+
+    return '<!DOCTYPE html>\n' + clone.outerHTML;
+}
+
+async function exportStandaloneHTML(startMode) {
+    try {
+        const html = buildStandaloneHTML(startMode);
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        if (!(await confirmLargeExport(blob.size))) return;
+        downloadBlob(blob, `luxury-tree-${startMode === 'display' ? 'show' : 'edit'}-${dateStamp()}.html`);
+        showToast('网页已导出', { type: 'success' });
+    } catch (err) {
+        console.error('导出 HTML 失败：', err);
+        showToast('导出网页失败，请重试', { type: 'error', duration: 4200 });
+    }
+}
+
+/* ============================================================
+ * 调试接口 & 启动
+ * ============================================================ */
+
+window.__LUXURY_TREE__ = {
+    get state() { return STATE; },
+    CONFIG,
+    THEMES,
+    get photos() { return photoItems; },
+    get renderer() { return renderer; },
+    get scene() { return scene; },
+    get camera() { return camera; },
+    switchTheme,
+    applyQuality,
+    serializeScene,
+    applySceneData,
+    buildStandaloneHTML,
+    setDisplayMode,
+    processGestures,
+    startCamera,
+    stopCamera
+};
+
+init();
+
+
+
+
+
+    </script>
+</body>
+</html>
